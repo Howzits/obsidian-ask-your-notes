@@ -21,8 +21,8 @@ Chat with any OpenAI-compatible LLM inside Obsidian — **the note you are worki
 ### From source
 
 ```bash
-git clone <your-repo-url>
-cd <repo>
+git clone https://github.com/Howzits/obsidian-ask-your-notes.git
+cd obsidian-ask-your-notes
 npm install
 npm run build
 ```
