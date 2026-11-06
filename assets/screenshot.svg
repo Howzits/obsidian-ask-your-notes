@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="userGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#6D28D9"/>
+    </linearGradient>
+    <linearGradient id="sendGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+
+  <!-- Canvas -->
+  <rect width="1200" height="800" fill="#141417"/>
+
+  <!-- Panel window -->
+  <rect x="90" y="50" width="1020" height="730" rx="22" fill="#1D1D21" stroke="#33333A" stroke-width="1"/>
+
+  <!-- Header -->
+  <circle cx="118" cy="94" r="5" fill="#7C3AED"/>
+  <text x="134" y="102" font-family="system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600" fill="#E9E9EC">Ask Your Notes</text>
+  <text x="134" y="126" font-family="system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="14" fill="#7A7A82">deepseek-chat</text>
+
+  <!-- Header icon buttons -->
+  <g stroke="#9A9AA3" stroke-width="2" stroke-linecap="round" fill="none">
+    <circle cx="1018" cy="90" r="15" stroke="#3A3A43"/>
+    <path d="M1011 90 L1025 90 M1018 83 L1018 97"/>
+    <circle cx="1058" cy="90" r="15" stroke="#3A3A43"/>
+    <path d="M1052 82 L1064 82 M1052 90 L1064 90 M1052 98 L1064 98"/>
+  </g>
+  <circle cx="1055" cy="82" r="2.5" fill="#9A9AA3"/>
+  <circle cx="1059" cy="90" r="2.5" fill="#9A9AA3"/>
+  <circle cx="1053" cy="98" r="2.5" fill="#9A9AA3"/>
+
+  <line x1="130" y1="140" x2="1070" y2="140" stroke="#2E2E35" stroke-width="1"/>
+
+  <!-- User bubble 1 -->
+  <rect x="710" y="158" width="340" height="60" rx="20" fill="url(#userGrad)"/>
+  <text x="738" y="193" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="19" fill="#FFFFFF">总结这篇笔记的要点</text>
+
+  <!-- Assistant bubble 1 -->
+  <rect x="150" y="236" width="900" height="252" rx="20" fill="#26262B" stroke="#35353C" stroke-width="1"/>
+  <rect x="184" y="272" width="5" height="26" rx="2.5" fill="#7C3AED"/>
+  <text x="202" y="292" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="20" font-weight="600" fill="#E9E9EC">核心要点</text>
+  <circle cx="193" cy="326" r="4" fill="#8B5CF6"/>
+  <text x="214" y="332" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="18" fill="#C9C9CE">输入 @ 即可引用任意笔记，支持多篇同时引用</text>
+  <circle cx="193" cy="364" r="4" fill="#8B5CF6"/>
+  <text x="214" y="370" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="18" fill="#C9C9CE">默认上下文跟随当前激活的笔记，选中文字只发送选中部分</text>
+  <circle cx="193" cy="402" r="4" fill="#8B5CF6"/>
+  <text x="214" y="408" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="18" fill="#C9C9CE">流式输出可随时停止，回复支持复制 / 插入 / 重新生成</text>
+
+  <!-- Assistant bubble actions (copy / insert / refresh) -->
+  <g stroke="#7A7A82" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="846" y="456" width="22" height="22" rx="6"/>
+    <rect x="856" y="446" width="22" height="22" rx="6"/>
+    <path d="M916 466 L916 486 M910 479 L916 486 L922 479"/>
+    <line x1="906" y1="466" x2="926" y2="466"/>
+    <path d="M956 446 A 18 18 0 1 1 940 462"/>
+    <path d="M952 442 L960 446 L954 454"/>
+  </g>
+
+  <!-- User bubble 2 -->
+  <rect x="760" y="506" width="290" height="56" rx="20" fill="url(#userGrad)"/>
+  <text x="786" y="539" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="17" fill="#FFFFFF">再展开讲讲第二点</text>
+
+  <!-- Assistant bubble 2 (streaming) -->
+  <rect x="150" y="580" width="640" height="60" rx="20" fill="#26262B" stroke="#35353C" stroke-width="1"/>
+  <text x="184" y="616" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="17" fill="#C9C9CE">好的，第二点是关于 @ 引用的工作方式…</text>
+  <rect x="700" y="600" width="7" height="18" rx="3.5" fill="#8B8B93"/>
+
+  <!-- Context line -->
+  <text x="184" y="674" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="15" fill="#7A7A82">上下文：Obsidian 插件开发.md · 3,204 字符</text>
+
+  <!-- Input capsule -->
+  <rect x="150" y="690" width="900" height="78" rx="24" fill="#26262B" stroke="#35353C" stroke-width="1"/>
+
+  <!-- Context chip + reset -->
+  <rect x="170" y="702" width="176" height="26" rx="13" fill="#7C3AED" fill-opacity="0.12" stroke="#7C3AED" stroke-opacity="0.45" stroke-width="1"/>
+  <text x="186" y="720" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="14" fill="#C4B5FD">@Obsidian 插件开发</text>
+  <g stroke="#9A9AA3" stroke-width="1.8" stroke-linecap="round">
+    <path d="M326 710 L338 722 M338 710 L326 722"/>
+  </g>
+  <circle cx="366" cy="715" r="11" stroke="#4A4A53" stroke-width="1.2" fill="none"/>
+  <g stroke="#7A7A82" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <path d="M360 715 A 6 6 0 1 1 372 715"/>
+    <path d="M370 709 L373 712 L370 715"/>
+  </g>
+
+  <!-- Placeholder -->
+  <text x="186" y="752" font-family="PingFang SC, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="16" fill="#5F5F66">输入消息…（Enter 发送，Shift+Enter 换行）</text>
+
+  <!-- Send button -->
+  <circle cx="1012" cy="729" r="22" fill="url(#sendGrad)"/>
+  <path d="M1003 719 L1022 729 L1003 739 Z" fill="#FFFFFF"/>
+</svg>
