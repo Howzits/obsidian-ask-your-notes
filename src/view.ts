@@ -1,0 +1,636 @@
+import {
+	App,
+	ItemView,
+	MarkdownRenderer,
+	MarkdownView,
+	Notice,
+	Platform,
+	setIcon,
+	WorkspaceLeaf,
+} from "obsidian";
+import type LlmChatPlugin from "../main";
+import { chatCompletion, chatCompletionStream } from "./api";
+import { t } from "./i18n";
+import type { ChatMessage } from "./types";
+
+export const VIEW_TYPE_CHAT = "llm-note-chat-view";
+
+interface SettingsApp extends App {
+	setting: { open(): void; openTabById(id: string): void };
+}
+
+interface ContextInfo {
+	path: string;
+	content: string;
+	isSelection: boolean;
+	chars: number;
+}
+
+function truncate(text: string, max: number): string {
+	if (text.length <= max) return text;
+	return `${text.slice(0, max)}\n\n… (truncated)`;
+}
+
+export class ChatView extends ItemView {
+	private plugin: LlmChatPlugin;
+	private messages: ChatMessage[] = [];
+	private busy = false;
+	private abortController: AbortController | null = null;
+	private lastMarkdownView: MarkdownView | null = null;
+	private autoScroll = true;
+	private sessionId = 0;
+	private copyText = new WeakMap<HTMLElement, string>();
+	private regenerateButtons: HTMLButtonElement[] = [];
+
+	private messagesEl!: HTMLElement;
+	private contextEl!: HTMLElement;
+	private inputEl!: HTMLTextAreaElement;
+	private sendBtn!: HTMLButtonElement;
+	private stopBtn!: HTMLButtonElement;
+	private subtitleEl!: HTMLElement;
+
+	constructor(leaf: WorkspaceLeaf, plugin: LlmChatPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
+
+	getViewType(): string {
+		return VIEW_TYPE_CHAT;
+	}
+
+	getDisplayText(): string {
+		return t("viewTitle");
+	}
+
+	getIcon(): string {
+		return "message-square";
+	}
+
+	async onOpen(): Promise<void> {
+		this.messages = this.plugin.settings.persistHistory
+			? [...this.plugin.history]
+			: [];
+		this.initContextView();
+		this.buildUI();
+		this.renderConversation();
+		this.updateContextBar();
+		this.inputEl.focus();
+
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", (leaf) => {
+				if (leaf?.view instanceof MarkdownView) {
+					this.lastMarkdownView = leaf.view;
+				}
+				this.updateContextBar();
+			})
+		);
+	}
+
+	async onClose(): Promise<void> {
+		this.abortController?.abort();
+	}
+
+	/** Rebuild the whole UI (used after a language change). */
+	rebuildUI(): void {
+		if (this.busy) return;
+		this.buildUI();
+		this.renderConversation();
+		this.updateContextBar();
+	}
+
+	refreshHeader(): void {
+		if (this.subtitleEl) {
+			this.subtitleEl.setText(
+				this.plugin.settings.model || t("modelUnset")
+			);
+		}
+	}
+
+	startNewChat(): void {
+		this.sessionId++;
+		this.abortController?.abort();
+		this.messages = [];
+		this.plugin.history = [];
+		void this.plugin.saveAll();
+		this.renderConversation();
+		this.updateContextBar();
+		this.inputEl?.focus();
+	}
+
+	// ---------- UI construction ----------
+
+	private buildUI(): void {
+		const container = this.containerEl.children[1] as HTMLElement;
+		container.empty();
+		container.addClass("llm-chat-container");
+
+		const header = container.createDiv({ cls: "llm-chat-header" });
+		const titleWrap = header.createDiv({ cls: "llm-chat-title-wrap" });
+		titleWrap.createDiv({ cls: "llm-chat-title", text: t("viewTitle") });
+		this.subtitleEl = titleWrap.createDiv({
+			cls: "llm-chat-subtitle",
+			text: this.plugin.settings.model || t("modelUnset"),
+		});
+
+		const actions = header.createDiv({ cls: "llm-chat-actions" });
+		this.iconButton(actions, "plus", t("newChat"), () =>
+			this.startNewChat()
+		);
+		this.iconButton(actions, "settings", t("settings"), () => {
+			const app = this.app as SettingsApp;
+			app.setting.open();
+			app.setting.openTabById(this.plugin.manifest.id);
+		});
+
+		this.messagesEl = container.createDiv({ cls: "llm-chat-messages" });
+		this.messagesEl.addEventListener("scroll", () => {
+			this.autoScroll = this.isNearBottom();
+		});
+
+		const footer = container.createDiv({ cls: "llm-chat-footer" });
+		this.contextEl = footer.createDiv({ cls: "llm-chat-context" });
+
+		const inputRow = footer.createDiv({ cls: "llm-chat-input-row" });
+		this.inputEl = inputRow.createEl("textarea", {
+			cls: "llm-chat-input",
+			attr: { placeholder: t("placeholder"), rows: "1" },
+		});
+		this.inputEl.addEventListener("keydown", (evt: KeyboardEvent) => {
+			// isComposing: don't send while an IME candidate window is open
+			if (evt.key === "Enter" && !evt.shiftKey && !evt.isComposing) {
+				evt.preventDefault();
+				void this.send();
+			}
+		});
+		this.inputEl.addEventListener("input", () => this.autoResize());
+
+		const btnCol = inputRow.createDiv({ cls: "llm-chat-btn-col" });
+		this.sendBtn = btnCol.createEl("button", {
+			cls: "llm-chat-send",
+			attr: { "aria-label": t("send"), title: t("send") },
+		});
+		setIcon(this.sendBtn, "send");
+		this.sendBtn.addEventListener("click", () => void this.send());
+
+		this.stopBtn = btnCol.createEl("button", {
+			cls: "llm-chat-stop",
+			attr: { "aria-label": t("stop"), title: t("stop") },
+		});
+		setIcon(this.stopBtn, "square");
+		this.stopBtn.toggleClass("is-hidden", true);
+		this.stopBtn.addEventListener("click", () =>
+			this.abortController?.abort()
+		);
+	}
+
+	private iconButton(
+		parent: HTMLElement,
+		icon: string,
+		label: string,
+		onClick: () => void
+	): HTMLButtonElement {
+		const button = parent.createEl("button", {
+			cls: "llm-chat-icon-btn",
+			attr: { "aria-label": label, title: label },
+		});
+		setIcon(button, icon);
+		button.addEventListener("click", onClick);
+		return button;
+	}
+
+	// ---------- Rendering ----------
+
+	private renderConversation(): void {
+		this.messagesEl.empty();
+		this.regenerateButtons = [];
+		if (this.messages.length === 0) {
+			this.renderEmptyState();
+			return;
+		}
+		this.messages.forEach((message, index) =>
+			this.renderMessage(message, index)
+		);
+		this.scrollToBottom(true);
+	}
+
+	private renderEmptyState(): void {
+		const wrap = this.messagesEl.createDiv({ cls: "llm-chat-empty" });
+		const icon = wrap.createDiv({ cls: "llm-chat-empty-icon" });
+		setIcon(icon, "sparkles");
+		wrap.createDiv({ cls: "llm-chat-empty-title", text: t("emptyTitle") });
+		wrap.createDiv({ cls: "llm-chat-empty-body", text: t("emptyBody") });
+
+		const chips = wrap.createDiv({ cls: "llm-chat-chips" });
+		(
+			["suggestion1", "suggestion2", "suggestion3"] as const
+		).forEach((key) => {
+			const chip = chips.createEl("button", {
+				cls: "llm-chat-chip",
+				text: t(key),
+			});
+			chip.addEventListener("click", () => {
+				this.inputEl.value = t(key);
+				this.inputEl.focus();
+				this.autoResize();
+			});
+		});
+	}
+
+	private renderMessage(message: ChatMessage, index: number): void {
+		if (message.role === "user") {
+			const row = this.messagesEl.createDiv({ cls: "llm-chat-msg user" });
+			row.createDiv({ cls: "llm-chat-bubble" }).setText(message.content);
+			return;
+		}
+		if (message.role === "assistant") {
+			const { bubble, content } = this.createAssistantBubble();
+			this.copyText.set(bubble, message.content);
+			void this.renderMarkdown(content, message.content);
+			if (index === this.messages.length - 1) {
+				this.addRegenerateButton(bubble);
+			}
+		}
+	}
+
+	private async renderMarkdown(
+		element: HTMLElement,
+		markdown: string
+	): Promise<void> {
+		element.empty();
+		const sourcePath = this.getContextView()?.file?.path ?? "";
+		await MarkdownRenderer.render(
+			this.app,
+			markdown,
+			element,
+			sourcePath,
+			this
+		);
+	}
+
+	private createAssistantBubble(): {
+		bubble: HTMLElement;
+		content: HTMLElement;
+	} {
+		const row = this.messagesEl.createDiv({ cls: "llm-chat-msg assistant" });
+		const bubble = row.createDiv({ cls: "llm-chat-bubble" });
+		const content = bubble.createDiv({ cls: "llm-chat-content" });
+		const actions = bubble.createDiv({ cls: "llm-chat-bubble-actions" });
+		this.iconButton(actions, "copy", t("copy"), () =>
+			void this.copyBubble(bubble)
+		);
+		this.iconButton(actions, "arrow-down-to-line", t("insert"), () =>
+			this.insertBubble(bubble)
+		);
+		return { bubble, content };
+	}
+
+	private addRegenerateButton(bubble: HTMLElement): void {
+		const actions = bubble.querySelector(".llm-chat-bubble-actions");
+		if (!(actions instanceof HTMLElement)) return;
+		const button = this.iconButton(actions, "refresh-cw", t("regenerate"), () =>
+			void this.regenerate()
+		);
+		this.regenerateButtons.push(button);
+	}
+
+	private clearRegenerateButtons(): void {
+		this.regenerateButtons.forEach((button) => button.remove());
+		this.regenerateButtons = [];
+	}
+
+	private setBusy(busy: boolean): void {
+		this.sendBtn.disabled = busy;
+		this.stopBtn.toggleClass("is-hidden", !busy);
+	}
+
+	// ---------- Messaging ----------
+
+	private async send(): Promise<void> {
+		if (this.busy) return;
+		const text = this.inputEl.value.trim();
+		if (!text) return;
+
+		const settings = this.plugin.settings;
+		if (
+			settings.provider !== "ollama" &&
+			settings.provider !== "custom" &&
+			!settings.apiKey
+		) {
+			new Notice(t("needApiKey"));
+			return;
+		}
+		if (!settings.apiEndpoint || !settings.model) {
+			new Notice(t("needEndpoint"));
+			return;
+		}
+
+		this.clearRegenerateButtons();
+		if (this.messages.length === 0) this.messagesEl.empty();
+
+		const userMessage: ChatMessage = { role: "user", content: text };
+		this.messages.push(userMessage);
+		this.renderMessage(userMessage, this.messages.length - 1);
+		this.inputEl.value = "";
+		this.autoResize();
+		this.autoScroll = true;
+		this.scrollToBottom(true);
+		this.persist();
+
+		await this.runCompletion();
+	}
+
+	private async runCompletion(): Promise<void> {
+		const last = this.messages[this.messages.length - 1];
+		if (this.busy || !last || last.role !== "user") return;
+
+		const settings = this.plugin.settings;
+		const context = this.collectContext();
+		this.updateContextBar(context);
+
+		const apiMessages: ChatMessage[] = [];
+		if (settings.systemPrompt.trim()) {
+			apiMessages.push({
+				role: "system",
+				content: settings.systemPrompt.trim(),
+			});
+		}
+		if (context) {
+			apiMessages.push({
+				role: "system",
+				content: this.buildContextPrompt(context),
+			});
+		}
+		apiMessages.push(...this.messages);
+
+		const session = this.sessionId;
+		const { bubble, content } = this.createAssistantBubble();
+		bubble.addClass("llm-chat-streaming");
+		content.setText("");
+
+		this.busy = true;
+		this.setBusy(true);
+		this.autoScroll = true;
+		this.scrollToBottom(true);
+
+		const controller = new AbortController();
+		this.abortController = controller;
+
+		let full = "";
+		let streamed = "";
+		let failed: string | null = null;
+
+		try {
+			if (settings.stream && !Platform.isMobileApp) {
+				full = await chatCompletionStream({
+					endpoint: settings.apiEndpoint,
+					apiKey: settings.apiKey,
+					model: settings.model,
+					messages: apiMessages,
+					temperature: settings.temperature,
+					maxTokens: settings.maxTokens,
+					signal: controller.signal,
+					onDelta: (_delta, fullText) => {
+						streamed = fullText;
+						content.setText(fullText);
+						this.scrollToBottom();
+					},
+				});
+			} else {
+				full = await chatCompletion({
+					endpoint: settings.apiEndpoint,
+					apiKey: settings.apiKey,
+					model: settings.model,
+					messages: apiMessages,
+					temperature: settings.temperature,
+					maxTokens: settings.maxTokens,
+				});
+				content.setText(full);
+			}
+		} catch (error) {
+			if (!controller.signal.aborted) {
+				failed =
+					error instanceof Error ? error.message : String(error);
+			}
+		} finally {
+			this.abortController = null;
+			this.busy = false;
+			this.setBusy(false);
+			bubble.removeClass("llm-chat-streaming");
+		}
+
+		if (!full && streamed) full = streamed;
+
+		const row = bubble.parentElement;
+		if (session !== this.sessionId) {
+			row?.remove();
+			return;
+		}
+
+		if (full) {
+			await this.renderMarkdown(content, full);
+			this.copyText.set(bubble, full);
+			if (failed) {
+				content.createDiv({
+					cls: "llm-chat-error",
+					text: `${t("errorPrefix")}${failed}`,
+				});
+			}
+			this.addRegenerateButton(bubble);
+			this.messages.push({ role: "assistant", content: full });
+			this.persist();
+		} else if (failed) {
+			content.empty();
+			content.createDiv({
+				cls: "llm-chat-error",
+				text: `${t("errorPrefix")}${failed}`,
+			});
+			this.addRegenerateButton(bubble);
+		} else if (controller.signal.aborted) {
+			row?.remove();
+		} else {
+			content.setText(t("noContent"));
+			this.addRegenerateButton(bubble);
+		}
+
+		this.scrollToBottom();
+	}
+
+	private async regenerate(): Promise<void> {
+		if (this.busy) return;
+		const last = this.messages[this.messages.length - 1];
+		if (!last) return;
+		if (last.role === "assistant") this.messages.pop();
+		const tail = this.messages[this.messages.length - 1];
+		if (!tail || tail.role !== "user") return;
+
+		this.renderConversation();
+		this.persist();
+		await this.runCompletion();
+	}
+
+	private persist(): void {
+		if (!this.plugin.settings.persistHistory) {
+			if (this.plugin.history.length > 0) {
+				this.plugin.history = [];
+				void this.plugin.saveAll();
+			}
+			return;
+		}
+		let messages = this.messages;
+		if (messages.length > 200) messages = messages.slice(-200);
+		while (messages.length > 0 && messages[0].role !== "user") {
+			messages = messages.slice(1);
+		}
+		this.plugin.history = messages;
+		void this.plugin.saveAll();
+	}
+
+	// ---------- Bubble actions ----------
+
+	private async copyBubble(bubble: HTMLElement): Promise<void> {
+		const text = this.copyText.get(bubble);
+		if (!text) {
+			new Notice(t("nothingToCopy"));
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(text);
+			new Notice(t("copied"));
+		} catch {
+			try {
+				const textarea = document.createElement("textarea");
+				textarea.value = text;
+				textarea.style.position = "fixed";
+				textarea.style.opacity = "0";
+				document.body.appendChild(textarea);
+				textarea.select();
+				const ok = document.execCommand("copy");
+				textarea.remove();
+				new Notice(ok ? t("copied") : t("copyFailed"));
+			} catch {
+				new Notice(t("copyFailed"));
+			}
+		}
+	}
+
+	private insertBubble(bubble: HTMLElement): void {
+		const text = this.copyText.get(bubble);
+		if (!text) {
+			new Notice(t("nothingToCopy"));
+			return;
+		}
+		const view = this.getContextView();
+		if (!view) {
+			new Notice(t("insertFailed"));
+			return;
+		}
+		view.editor.replaceSelection(text);
+		new Notice(t("inserted"));
+	}
+
+	// ---------- Context ----------
+
+	private initContextView(): void {
+		const recent = this.app.workspace.getMostRecentLeaf();
+		if (recent && recent.view instanceof MarkdownView) {
+			this.lastMarkdownView = recent.view;
+			return;
+		}
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			if (leaf.view instanceof MarkdownView && leaf.view.file) {
+				this.lastMarkdownView = leaf.view;
+				return;
+			}
+		}
+	}
+
+	private getContextView(): MarkdownView | null {
+		const active = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (active) {
+			this.lastMarkdownView = active;
+			return active;
+		}
+		const last = this.lastMarkdownView;
+		if (
+			last &&
+			last.file &&
+			this.app.workspace.getLeavesOfType("markdown").includes(last.leaf)
+		) {
+			return last;
+		}
+		return null;
+	}
+
+	private collectContext(): ContextInfo | null {
+		const settings = this.plugin.settings;
+		if (!settings.includeActiveNote) return null;
+
+		const view = this.getContextView();
+		if (!view || !view.file) return null;
+
+		const selection = view.editor.getSelection();
+		const useSelection =
+			settings.preferSelection && selection.trim().length > 0;
+		const raw = useSelection ? selection : view.editor.getValue();
+
+		return {
+			path: view.file.path,
+			content: truncate(raw, settings.maxContextChars),
+			isSelection: useSelection,
+			chars: raw.length,
+		};
+	}
+
+	private buildContextPrompt(context: ContextInfo): string {
+		const body = context.isSelection
+			? "text they selected in it"
+			: "full note content";
+		return `The user is currently working on the note "${context.path}". Here is the ${body} in Markdown:\n\n<note>\n${context.content}\n</note>\n\nUse it as context when answering the user. If their question is unrelated to the note, answer normally.`;
+	}
+
+	private updateContextBar(context?: ContextInfo | null): void {
+		if (!this.contextEl) return;
+		const settings = this.plugin.settings;
+		let text: string;
+
+		if (!settings.includeActiveNote) {
+			text = t("contextOff");
+		} else {
+			const info = context === undefined ? this.collectContext() : context;
+			if (!info) {
+				text = t("contextNone");
+			} else {
+				const template = info.isSelection
+					? t("contextSelection")
+					: t("contextNote");
+				text = template
+					.replace("{path}", info.path)
+					.replace("{chars}", String(info.chars));
+			}
+		}
+		this.contextEl.setText(text);
+	}
+
+	// ---------- Scrolling & input ----------
+
+	private isNearBottom(): boolean {
+		const element = this.messagesEl;
+		return (
+			element.scrollHeight - element.scrollTop - element.clientHeight < 60
+		);
+	}
+
+	private scrollToBottom(force = false): void {
+		if (!force && !this.autoScroll) return;
+		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+	}
+
+	private autoResize(): void {
+		if (!this.inputEl) return;
+		this.inputEl.style.height = "auto";
+		this.inputEl.style.height = `${Math.min(
+			this.inputEl.scrollHeight,
+			160
+		)}px`;
+	}
+}
