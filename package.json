@@ -1,5 +1,5 @@
 {
-  "name": "obsidian-llm-note-chat",
+  "name": "obsidian-ask-your-notes",
   "version": "1.1.0",
   "description": "Obsidian plugin: chat with any OpenAI-compatible LLM using the active note as context",
   "main": "main.js",

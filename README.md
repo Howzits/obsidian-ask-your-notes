@@ -1,4 +1,4 @@
-# LLM Note Chat
+# Ask Your Notes
 
 Chat with any OpenAI-compatible LLM inside Obsidian — **the note you are working on is sent as context automatically**.
 
@@ -30,10 +30,10 @@ npm run build
 Copy `main.js`, `manifest.json`, and `styles.css` into:
 
 ```
-<your-vault>/.obsidian/plugins/llm-note-chat/
+<your-vault>/.obsidian/plugins/ask-your-notes/
 ```
 
-Then reload Obsidian and enable **LLM Note Chat** under *Settings → Community plugins*.
+Then reload Obsidian and enable **Ask Your Notes** under *Settings → Community plugins*.
 
 ### BRAT (alternative)
 
@@ -41,7 +41,7 @@ Add this repository to [BRAT](https://github.com/TfTHacker/obsidian42-brat) and 
 
 ## Configuration
 
-Open *Settings → LLM Note Chat* and pick a provider:
+Open *Settings → Ask Your Notes* and pick a provider:
 
 | Provider | Endpoint | Example model |
 | --- | --- | --- |
@@ -108,11 +108,11 @@ The GitHub Actions workflow builds and attaches `main.js`, `manifest.json`, and 
 
 ### 安装
 
-把 `main.js`、`manifest.json`、`styles.css` 放入 `<你的库>/.obsidian/plugins/llm-note-chat/`，重启 Obsidian 并在第三方插件中启用。
+把 `main.js`、`manifest.json`、`styles.css` 放入 `<你的库>/.obsidian/plugins/ask-your-notes/`，重启 Obsidian 并在第三方插件中启用。
 
 ### 配置
 
-设置 → LLM Note Chat，选择服务商并填入 API Key，点「测试连接」确认可用。
+设置 → Ask Your Notes，选择服务商并填入 API Key，点「测试连接」确认可用。
 
 ### 使用
 

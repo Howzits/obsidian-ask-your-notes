@@ -29,9 +29,9 @@ var import_obsidian4 = require("obsidian");
 
 // src/i18n.ts
 var en = {
-  openChat: "Open LLM chat",
+  openChat: "Open Ask Your Notes",
   newChat: "New chat",
-  viewTitle: "LLM Note Chat",
+  viewTitle: "Ask Your Notes",
   settings: "Settings",
   modelUnset: "No model set",
   placeholder: "Ask anything\u2026 (Enter to send, Shift+Enter for a new line)",
@@ -59,7 +59,7 @@ var en = {
   suggestion1: "Summarize this note",
   suggestion2: "What are the key takeaways?",
   suggestion3: "Turn this note into an outline",
-  settingsTitle: "LLM Note Chat",
+  settingsTitle: "Ask Your Notes",
   provider: "Provider",
   providerDesc: "Pick a preset, or choose Custom to enter your own endpoint",
   apiEndpoint: "API endpoint",
@@ -105,9 +105,9 @@ var en = {
   resetDone: "Settings restored to defaults"
 };
 var zh = {
-  openChat: "\u6253\u5F00 LLM \u804A\u5929",
+  openChat: "\u6253\u5F00 Ask Your Notes",
   newChat: "\u65B0\u5EFA\u5BF9\u8BDD",
-  viewTitle: "LLM Note Chat",
+  viewTitle: "Ask Your Notes",
   settings: "\u8BBE\u7F6E",
   modelUnset: "\u672A\u8BBE\u7F6E\u6A21\u578B",
   placeholder: "\u8F93\u5165\u6D88\u606F\u2026\uFF08Enter \u53D1\u9001\uFF0CShift+Enter \u6362\u884C\uFF09",
@@ -135,7 +135,7 @@ var zh = {
   suggestion1: "\u603B\u7ED3\u8FD9\u7BC7\u7B14\u8BB0",
   suggestion2: "\u63D0\u53D6\u5173\u952E\u8981\u70B9",
   suggestion3: "\u628A\u8FD9\u7BC7\u7B14\u8BB0\u6574\u7406\u6210\u5927\u7EB2",
-  settingsTitle: "LLM Note Chat \u8BBE\u7F6E",
+  settingsTitle: "Ask Your Notes \u8BBE\u7F6E",
   provider: "\u670D\u52A1\u5546",
   providerDesc: "\u9009\u62E9\u9884\u8BBE\u670D\u52A1\u5546\uFF0C\u6216\u9009\u300C\u81EA\u5B9A\u4E49\u300D\u624B\u52A8\u586B\u5199",
   apiEndpoint: "API \u5730\u5740",

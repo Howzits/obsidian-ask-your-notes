@@ -1,9 +1,9 @@
 import type { UILanguage } from "./types";
 
 const en = {
-	openChat: "Open LLM chat",
+	openChat: "Open Ask Your Notes",
 	newChat: "New chat",
-	viewTitle: "LLM Note Chat",
+	viewTitle: "Ask Your Notes",
 	settings: "Settings",
 	modelUnset: "No model set",
 	placeholder: "Ask anything… (Enter to send, Shift+Enter for a new line)",
@@ -32,7 +32,7 @@ const en = {
 	suggestion1: "Summarize this note",
 	suggestion2: "What are the key takeaways?",
 	suggestion3: "Turn this note into an outline",
-	settingsTitle: "LLM Note Chat",
+	settingsTitle: "Ask Your Notes",
 	provider: "Provider",
 	providerDesc: "Pick a preset, or choose Custom to enter your own endpoint",
 	apiEndpoint: "API endpoint",
@@ -83,9 +83,9 @@ const en = {
 type Dict = typeof en;
 
 const zh: Record<keyof Dict, string> = {
-	openChat: "打开 LLM 聊天",
+	openChat: "打开 Ask Your Notes",
 	newChat: "新建对话",
-	viewTitle: "LLM Note Chat",
+	viewTitle: "Ask Your Notes",
 	settings: "设置",
 	modelUnset: "未设置模型",
 	placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
@@ -114,7 +114,7 @@ const zh: Record<keyof Dict, string> = {
 	suggestion1: "总结这篇笔记",
 	suggestion2: "提取关键要点",
 	suggestion3: "把这篇笔记整理成大纲",
-	settingsTitle: "LLM Note Chat 设置",
+	settingsTitle: "Ask Your Notes 设置",
 	provider: "服务商",
 	providerDesc: "选择预设服务商，或选「自定义」手动填写",
 	apiEndpoint: "API 地址",
