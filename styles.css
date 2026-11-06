@@ -353,10 +353,10 @@
 
 .llm-chat-input-row {
 	display: flex;
-	align-items: flex-end;
-	gap: 10px;
+	flex-direction: column;
+	gap: 0;
 	margin: 4px 16px 16px;
-	padding: 8px 8px 8px 14px;
+	padding: 6px 8px 8px 14px;
 	border-radius: 22px;
 	border: 1px solid var(--background-modifier-border);
 	background: var(--background-secondary);
@@ -367,6 +367,99 @@
 	border-color: var(--interactive-accent);
 	box-shadow: 0 0 0 2px
 		color-mix(in srgb, var(--interactive-accent) 25%, transparent);
+}
+
+.llm-chat-input-inner {
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+}
+
+/* ---------- @-mention context chips ---------- */
+
+.llm-chat-chips-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 0 2px 6px 0;
+}
+
+.llm-chat-chip-ref {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 220px;
+	padding: 3px 4px 3px 10px;
+	border-radius: 999px;
+	border: 1px solid
+		color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.llm-chat-chip-ref:hover {
+	border-color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+}
+
+.llm-chat-chip-ref-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.llm-chat-chip-ref-remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.llm-chat-chip-ref-remove:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-error);
+}
+
+.llm-chat-chip-ref-remove svg {
+	width: 11px;
+	height: 11px;
+}
+
+.llm-chat-chip-reset {
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+}
+
+.llm-chat-chip-reset svg {
+	width: 13px;
+	height: 13px;
+}
+
+/* @-mention suggestion popover items */
+.llm-chat-suggest {
+	padding: 2px 0;
+}
+
+.llm-chat-suggest-name {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.llm-chat-suggest-path {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Override Obsidian's global textarea styles (base + every state),

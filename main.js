@@ -25,7 +25,7 @@ __export(main_exports, {
   default: () => LlmChatPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/i18n.ts
 var en = {
@@ -52,10 +52,13 @@ var en = {
   contextNone: "Context: no active note",
   contextNote: "Context: {path} \xB7 {chars} chars",
   contextSelection: "Context: {path} \xB7 selection \xB7 {chars} chars",
+  contextManualEmpty: "Context: no notes referenced \u2014 type @ to add",
+  removeRef: "Remove reference",
+  resetContext: "Restore default (follow active note)",
   needApiKey: "Add your API key in the plugin settings first",
   needEndpoint: "Set the API endpoint and model in the plugin settings first",
   emptyTitle: "Chat with your notes",
-  emptyBody: "The active note is sent as context with every message. Pick a provider in settings to get started.",
+  emptyBody: "The active note is sent as context with every message. Type @ to reference other notes instead.",
   suggestion1: "Summarize this note",
   suggestion2: "What are the key takeaways?",
   suggestion3: "Turn this note into an outline",
@@ -128,10 +131,13 @@ var zh = {
   contextNone: "\u4E0A\u4E0B\u6587\uFF1A\u6CA1\u6709\u6253\u5F00\u7684\u7B14\u8BB0",
   contextNote: "\u4E0A\u4E0B\u6587\uFF1A{path} \xB7 {chars} \u5B57\u7B26",
   contextSelection: "\u4E0A\u4E0B\u6587\uFF1A{path} \xB7 \u9009\u4E2D\u5185\u5BB9 \xB7 {chars} \u5B57\u7B26",
+  contextManualEmpty: "\u4E0A\u4E0B\u6587\uFF1A\u672A\u5F15\u7528\u7B14\u8BB0\uFF0C\u8F93\u5165 @ \u6DFB\u52A0",
+  removeRef: "\u79FB\u9664\u5F15\u7528",
+  resetContext: "\u6062\u590D\u9ED8\u8BA4\uFF08\u8DDF\u968F\u5F53\u524D\u7B14\u8BB0\uFF09",
   needApiKey: "\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u586B\u5199 API Key",
   needEndpoint: "\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u586B\u5199 API \u5730\u5740\u548C\u6A21\u578B",
   emptyTitle: "\u548C\u4F60\u7684\u7B14\u8BB0\u5BF9\u8BDD",
-  emptyBody: "\u6BCF\u6B21\u53D1\u9001\u90FD\u4F1A\u81EA\u52A8\u5E26\u4E0A\u5F53\u524D\u6FC0\u6D3B\u7684\u7B14\u8BB0\u4F5C\u4E3A\u4E0A\u4E0B\u6587\u3002\u5148\u5728\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u670D\u52A1\u5546\u5373\u53EF\u5F00\u59CB\u3002",
+  emptyBody: "\u6BCF\u6B21\u53D1\u9001\u90FD\u4F1A\u81EA\u52A8\u5E26\u4E0A\u5F53\u524D\u6FC0\u6D3B\u7684\u7B14\u8BB0\u3002\u8F93\u5165 @ \u53EF\u4EE5\u5F15\u7528\u5176\u4ED6\u7B14\u8BB0\u4F5C\u4E3A\u4E0A\u4E0B\u6587\u3002",
   suggestion1: "\u603B\u7ED3\u8FD9\u7BC7\u7B14\u8BB0",
   suggestion2: "\u63D0\u53D6\u5173\u952E\u8981\u70B9",
   suggestion3: "\u628A\u8FD9\u7BC7\u7B14\u8BB0\u6574\u7406\u6210\u5927\u7EB2",
@@ -517,7 +523,55 @@ var LlmChatSettingsTab = class extends import_obsidian2.PluginSettingTab {
 };
 
 // src/view.ts
+var import_obsidian4 = require("obsidian");
+
+// src/suggest.ts
 var import_obsidian3 = require("obsidian");
+var NoteSuggest = class extends import_obsidian3.AbstractInputSuggest {
+  constructor(app, input, onSelectFile) {
+    super(app, input);
+    this.openState = false;
+    this.input = input;
+    this.onSelectFile = onSelectFile;
+    this.limit = 8;
+  }
+  /** Whether the suggestion popover is currently open. */
+  get isOpen() {
+    return this.openState;
+  }
+  open() {
+    this.openState = true;
+    super.open();
+  }
+  close() {
+    this.openState = false;
+    super.close();
+  }
+  getSuggestions(query) {
+    const match = /(?:^|\s)@([^\s]*)$/.exec(query);
+    if (!match) return [];
+    const term = match[1].toLowerCase();
+    const files = this.app.vault.getMarkdownFiles();
+    const filtered = term ? files.filter(
+      (file) => file.path.toLowerCase().includes(term) || file.basename.toLowerCase().includes(term)
+    ) : files;
+    return filtered.sort((a, b) => a.path.length - b.path.length).slice(0, this.limit);
+  }
+  renderSuggestion(file, el) {
+    el.addClass("llm-chat-suggest");
+    el.createDiv({ cls: "llm-chat-suggest-name", text: file.basename });
+    el.createDiv({ cls: "llm-chat-suggest-path", text: file.path });
+  }
+  selectSuggestion(file, _evt) {
+    const value = this.input.value;
+    const idx = value.lastIndexOf("@");
+    this.input.value = idx >= 0 ? value.slice(0, idx) : "";
+    this.input.dispatchEvent(new Event("input"));
+    this.onSelectFile(file);
+  }
+};
+
+// src/view.ts
 var VIEW_TYPE_CHAT = "llm-note-chat-view";
 function truncate(text, max) {
   if (text.length <= max) return text;
@@ -525,7 +579,11 @@ function truncate(text, max) {
 
 \u2026 (truncated)`;
 }
-var ChatView = class extends import_obsidian3.ItemView {
+function noteName(path) {
+  var _a;
+  return (_a = path.split("/").pop()) != null ? _a : path;
+}
+var ChatView = class extends import_obsidian4.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.messages = [];
@@ -536,6 +594,11 @@ var ChatView = class extends import_obsidian3.ItemView {
     this.sessionId = 0;
     this.copyText = /* @__PURE__ */ new WeakMap();
     this.regenerateButtons = [];
+    /** @-mentions: referenced note paths. */
+    this.refs = [];
+    /** When true, the auto "follow active note" chip has been removed/overridden. */
+    this.manualMode = false;
+    this.noteSuggest = null;
     this.plugin = plugin;
   }
   getViewType() {
@@ -552,27 +615,31 @@ var ChatView = class extends import_obsidian3.ItemView {
     this.initContextView();
     this.buildUI();
     this.renderConversation();
-    this.updateContextBar();
+    await this.updateContextBar();
     this.inputEl.focus();
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf) => {
-        if ((leaf == null ? void 0 : leaf.view) instanceof import_obsidian3.MarkdownView) {
+        if ((leaf == null ? void 0 : leaf.view) instanceof import_obsidian4.MarkdownView) {
           this.lastMarkdownView = leaf.view;
         }
-        this.updateContextBar();
+        if (!this.manualMode) {
+          this.renderChips();
+        }
+        void this.updateContextBar();
       })
     );
   }
   async onClose() {
-    var _a;
-    (_a = this.abortController) == null ? void 0 : _a.abort();
+    var _a, _b;
+    (_a = this.noteSuggest) == null ? void 0 : _a.close();
+    (_b = this.abortController) == null ? void 0 : _b.abort();
   }
   /** Rebuild the whole UI (used after a language change). */
   rebuildUI() {
     if (this.busy) return;
     this.buildUI();
     this.renderConversation();
-    this.updateContextBar();
+    void this.updateContextBar();
   }
   refreshHeader() {
     if (this.subtitleEl) {
@@ -589,7 +656,7 @@ var ChatView = class extends import_obsidian3.ItemView {
     this.plugin.history = [];
     void this.plugin.saveAll();
     this.renderConversation();
-    this.updateContextBar();
+    void this.updateContextBar();
     (_b = this.inputEl) == null ? void 0 : _b.focus();
   }
   // ---------- UI construction ----------
@@ -623,29 +690,38 @@ var ChatView = class extends import_obsidian3.ItemView {
     const footer = container.createDiv({ cls: "llm-chat-footer" });
     this.contextEl = footer.createDiv({ cls: "llm-chat-context" });
     const inputRow = footer.createDiv({ cls: "llm-chat-input-row" });
-    this.inputEl = inputRow.createEl("textarea", {
+    this.chipsRow = inputRow.createDiv({ cls: "llm-chat-chips-row" });
+    const inner = inputRow.createDiv({ cls: "llm-chat-input-inner" });
+    this.inputEl = inner.createEl("textarea", {
       cls: "llm-chat-input",
       attr: { placeholder: t("placeholder"), rows: "1" }
     });
     this.inputEl.addEventListener("keydown", (evt) => {
+      var _a;
       if (evt.key === "Enter" && !evt.shiftKey && !evt.isComposing) {
+        if ((_a = this.noteSuggest) == null ? void 0 : _a.isOpen) return;
         evt.preventDefault();
         void this.send();
       }
     });
     this.inputEl.addEventListener("input", () => this.autoResize());
-    const btnCol = inputRow.createDiv({ cls: "llm-chat-btn-col" });
+    this.noteSuggest = new NoteSuggest(
+      this.app,
+      this.inputEl,
+      (file) => this.addRef(file)
+    );
+    const btnCol = inner.createDiv({ cls: "llm-chat-btn-col" });
     this.sendBtn = btnCol.createEl("button", {
       cls: "llm-chat-send",
       attr: { "aria-label": t("send"), title: t("send") }
     });
-    (0, import_obsidian3.setIcon)(this.sendBtn, "send");
+    (0, import_obsidian4.setIcon)(this.sendBtn, "send");
     this.sendBtn.addEventListener("click", () => void this.send());
     this.stopBtn = btnCol.createEl("button", {
       cls: "llm-chat-stop",
       attr: { "aria-label": t("stop"), title: t("stop") }
     });
-    (0, import_obsidian3.setIcon)(this.stopBtn, "square");
+    (0, import_obsidian4.setIcon)(this.stopBtn, "square");
     this.stopBtn.toggleClass("is-hidden", true);
     this.stopBtn.addEventListener(
       "click",
@@ -654,15 +730,100 @@ var ChatView = class extends import_obsidian3.ItemView {
         return (_a = this.abortController) == null ? void 0 : _a.abort();
       }
     );
+    this.renderChips();
   }
   iconButton(parent, icon, label, onClick) {
     const button = parent.createEl("button", {
       cls: "llm-chat-icon-btn",
       attr: { "aria-label": label, title: label }
     });
-    (0, import_obsidian3.setIcon)(button, icon);
+    (0, import_obsidian4.setIcon)(button, icon);
     button.addEventListener("click", onClick);
     return button;
+  }
+  // ---------- Context chips (@-mentions) ----------
+  /** Render the chips row above the input. */
+  renderChips() {
+    if (!this.chipsRow) return;
+    this.chipsRow.empty();
+    let paths = [];
+    if (this.manualMode) {
+      paths = [...this.refs];
+    } else {
+      const view = this.getContextView();
+      if (view == null ? void 0 : view.file) paths = [view.file.path];
+    }
+    for (const path of paths) {
+      const chip = this.chipsRow.createDiv({
+        cls: "llm-chat-chip-ref",
+        attr: { title: path }
+      });
+      chip.createSpan({
+        cls: "llm-chat-chip-ref-name",
+        text: `@${noteName(path)}`
+      });
+      const remove = chip.createSpan({
+        cls: "llm-chat-chip-ref-remove",
+        attr: { "aria-label": t("removeRef") }
+      });
+      (0, import_obsidian4.setIcon)(remove, "x");
+      remove.addEventListener("click", (evt) => {
+        evt.stopPropagation();
+        this.removeRef(path);
+      });
+      chip.addEventListener("click", () => this.openRefNote(path));
+    }
+    if (this.manualMode) {
+      const reset = this.chipsRow.createEl("button", {
+        cls: "llm-chat-icon-btn llm-chat-chip-reset",
+        attr: { title: t("resetContext"), "aria-label": t("resetContext") }
+      });
+      (0, import_obsidian4.setIcon)(reset, "rotate-ccw");
+      reset.addEventListener("click", () => this.resetRefs());
+    }
+    this.chipsRow.toggleClass(
+      "is-hidden",
+      paths.length === 0 && !this.manualMode
+    );
+  }
+  addRef(file) {
+    if (!this.manualMode) {
+      this.manualMode = true;
+      this.refs = [];
+    }
+    if (!this.refs.includes(file.path)) this.refs.push(file.path);
+    this.renderChips();
+    void this.updateContextBar();
+    this.inputEl.focus();
+  }
+  removeRef(path) {
+    if (this.manualMode) {
+      this.refs = this.refs.filter((p) => p !== path);
+    } else {
+      this.manualMode = true;
+      this.refs = [];
+    }
+    this.renderChips();
+    void this.updateContextBar();
+  }
+  resetRefs() {
+    this.manualMode = false;
+    this.refs = [];
+    this.renderChips();
+    void this.updateContextBar();
+  }
+  openRefNote(path) {
+    var _a;
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof import_obsidian4.TFile)) return;
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view;
+      if (view instanceof import_obsidian4.MarkdownView && ((_a = view.file) == null ? void 0 : _a.path) === path) {
+        void this.app.workspace.revealLeaf(leaf);
+        return;
+      }
+    }
+    void this.app.workspace.getLeaf(false).openFile(file);
   }
   // ---------- Rendering ----------
   renderConversation() {
@@ -680,7 +841,7 @@ var ChatView = class extends import_obsidian3.ItemView {
   renderEmptyState() {
     const wrap = this.messagesEl.createDiv({ cls: "llm-chat-empty" });
     const icon = wrap.createDiv({ cls: "llm-chat-empty-icon" });
-    (0, import_obsidian3.setIcon)(icon, "sparkles");
+    (0, import_obsidian4.setIcon)(icon, "sparkles");
     wrap.createDiv({ cls: "llm-chat-empty-title", text: t("emptyTitle") });
     wrap.createDiv({ cls: "llm-chat-empty-body", text: t("emptyBody") });
     const chips = wrap.createDiv({ cls: "llm-chat-chips" });
@@ -715,7 +876,7 @@ var ChatView = class extends import_obsidian3.ItemView {
     var _a, _b, _c;
     element.empty();
     const sourcePath = (_c = (_b = (_a = this.getContextView()) == null ? void 0 : _a.file) == null ? void 0 : _b.path) != null ? _c : "";
-    await import_obsidian3.MarkdownRenderer.render(
+    await import_obsidian4.MarkdownRenderer.render(
       this.app,
       markdown,
       element,
@@ -768,11 +929,11 @@ var ChatView = class extends import_obsidian3.ItemView {
     if (!text) return;
     const settings = this.plugin.settings;
     if (settings.provider !== "ollama" && settings.provider !== "custom" && !settings.apiKey) {
-      new import_obsidian3.Notice(t("needApiKey"));
+      new import_obsidian4.Notice(t("needApiKey"));
       return;
     }
     if (!settings.apiEndpoint || !settings.model) {
-      new import_obsidian3.Notice(t("needEndpoint"));
+      new import_obsidian4.Notice(t("needEndpoint"));
       return;
     }
     this.clearRegenerateButtons();
@@ -791,8 +952,8 @@ var ChatView = class extends import_obsidian3.ItemView {
     const last = this.messages[this.messages.length - 1];
     if (this.busy || !last || last.role !== "user") return;
     const settings = this.plugin.settings;
-    const context = this.collectContext();
-    this.updateContextBar(context);
+    const context = await this.collectContext();
+    await this.updateContextBar(context);
     const apiMessages = [];
     if (settings.systemPrompt.trim()) {
       apiMessages.push({
@@ -821,7 +982,7 @@ var ChatView = class extends import_obsidian3.ItemView {
     let streamed = "";
     let failed = null;
     try {
-      if (settings.stream && !import_obsidian3.Platform.isMobileApp) {
+      if (settings.stream && !import_obsidian4.Platform.isMobileApp) {
         full = await chatCompletionStream({
           endpoint: settings.apiEndpoint,
           apiKey: settings.apiKey,
@@ -921,12 +1082,12 @@ var ChatView = class extends import_obsidian3.ItemView {
   async copyBubble(bubble) {
     const text = this.copyText.get(bubble);
     if (!text) {
-      new import_obsidian3.Notice(t("nothingToCopy"));
+      new import_obsidian4.Notice(t("nothingToCopy"));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian3.Notice(t("copied"));
+      new import_obsidian4.Notice(t("copied"));
     } catch (e) {
       try {
         const textarea = document.createElement("textarea");
@@ -937,42 +1098,42 @@ var ChatView = class extends import_obsidian3.ItemView {
         textarea.select();
         const ok = document.execCommand("copy");
         textarea.remove();
-        new import_obsidian3.Notice(ok ? t("copied") : t("copyFailed"));
+        new import_obsidian4.Notice(ok ? t("copied") : t("copyFailed"));
       } catch (e2) {
-        new import_obsidian3.Notice(t("copyFailed"));
+        new import_obsidian4.Notice(t("copyFailed"));
       }
     }
   }
   insertBubble(bubble) {
     const text = this.copyText.get(bubble);
     if (!text) {
-      new import_obsidian3.Notice(t("nothingToCopy"));
+      new import_obsidian4.Notice(t("nothingToCopy"));
       return;
     }
     const view = this.getContextView();
     if (!view) {
-      new import_obsidian3.Notice(t("insertFailed"));
+      new import_obsidian4.Notice(t("insertFailed"));
       return;
     }
     view.editor.replaceSelection(text);
-    new import_obsidian3.Notice(t("inserted"));
+    new import_obsidian4.Notice(t("inserted"));
   }
   // ---------- Context ----------
   initContextView() {
     const recent = this.app.workspace.getMostRecentLeaf();
-    if (recent && recent.view instanceof import_obsidian3.MarkdownView) {
+    if (recent && recent.view instanceof import_obsidian4.MarkdownView) {
       this.lastMarkdownView = recent.view;
       return;
     }
     for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-      if (leaf.view instanceof import_obsidian3.MarkdownView && leaf.view.file) {
+      if (leaf.view instanceof import_obsidian4.MarkdownView && leaf.view.file) {
         this.lastMarkdownView = leaf.view;
         return;
       }
     }
   }
   getContextView() {
-    const active = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+    const active = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (active) {
       this.lastMarkdownView = active;
       return active;
@@ -983,45 +1144,100 @@ var ChatView = class extends import_obsidian3.ItemView {
     }
     return null;
   }
-  collectContext() {
+  /**
+   * Resolve the current context. Returns null when there is nothing to
+   * send. In auto mode the active note (or its selection) is used; in
+   * manual mode exactly the @-referenced notes are used.
+   */
+  async collectContext() {
+    var _a, _b, _c;
     const settings = this.plugin.settings;
-    if (!settings.includeActiveNote) return null;
-    const view = this.getContextView();
-    if (!view || !view.file) return null;
-    const selection = view.editor.getSelection();
-    const useSelection = settings.preferSelection && selection.trim().length > 0;
-    const raw = useSelection ? selection : view.editor.getValue();
-    return {
-      path: view.file.path,
-      content: truncate(raw, settings.maxContextChars),
-      isSelection: useSelection,
-      chars: raw.length
-    };
+    let paths;
+    let autoSingle = false;
+    if (this.manualMode) {
+      paths = [...this.refs];
+    } else {
+      if (!settings.includeActiveNote) return null;
+      const view = this.getContextView();
+      if (!(view == null ? void 0 : view.file)) return null;
+      paths = [view.file.path];
+      autoSingle = true;
+    }
+    if (paths.length === 0) return null;
+    const infos = [];
+    for (const path of paths) {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof import_obsidian4.TFile)) continue;
+      let raw = "";
+      for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+        const view = leaf.view;
+        if (view instanceof import_obsidian4.MarkdownView && ((_a = view.file) == null ? void 0 : _a.path) === path) {
+          raw = view.editor.getValue();
+          break;
+        }
+      }
+      if (raw === "") {
+        raw = await this.app.vault.cachedRead(file);
+      }
+      let isSelection = false;
+      if (autoSingle && settings.preferSelection) {
+        const selection = (_c = (_b = this.getContextView()) == null ? void 0 : _b.editor.getSelection()) != null ? _c : "";
+        if (selection.trim().length > 0) {
+          raw = selection;
+          isSelection = true;
+        }
+      }
+      if (!raw.trim()) continue;
+      infos.push({
+        path,
+        content: truncate(raw, settings.maxContextChars),
+        isSelection,
+        chars: raw.length
+      });
+    }
+    return infos.length > 0 ? infos : null;
   }
-  buildContextPrompt(context) {
-    const body = context.isSelection ? "text they selected in it" : "full note content";
-    return `The user is currently working on the note "${context.path}". Here is the ${body} in Markdown:
+  buildContextPrompt(infos) {
+    if (infos.length === 1 && infos[0].isSelection) {
+      return `The user is currently working on the note "${infos[0].path}". Here is the text they selected in it:
 
 <note>
-${context.content}
+${infos[0].content}
 </note>
 
 Use it as context when answering the user. If their question is unrelated to the note, answer normally.`;
+    }
+    const blocks = infos.map(
+      (info) => `<note path="${info.path}">
+${info.content}
+</note>`
+    ).join("\n\n");
+    const intro = infos.length === 1 ? `The user is currently working on the note "${infos[0].path}". Here is its Markdown content:` : `The user referenced the following notes as context:`;
+    return `${intro}
+
+${blocks}
+
+Use the note content above as context when answering the user. If their question is unrelated to these notes, answer normally.`;
   }
-  updateContextBar(context) {
+  async updateContextBar(context) {
     if (!this.contextEl) return;
     const settings = this.plugin.settings;
     let text;
-    if (!settings.includeActiveNote) {
-      text = t("contextOff");
-    } else {
-      const info = context === void 0 ? this.collectContext() : context;
-      if (!info) {
-        text = t("contextNone");
+    const infos = context === void 0 ? await this.collectContext() : context;
+    if (!infos) {
+      if (this.manualMode) {
+        text = t("contextManualEmpty");
+      } else if (!settings.includeActiveNote) {
+        text = t("contextOff");
       } else {
-        const template = info.isSelection ? t("contextSelection") : t("contextNote");
-        text = template.replace("{path}", info.path).replace("{chars}", String(info.chars));
+        text = t("contextNone");
       }
+    } else {
+      const paths = infos.map((info) => info.path).join("\u3001");
+      const chars = infos.reduce((sum, info) => sum + info.chars, 0);
+      const hasSelection = infos.length === 1 && infos[0].isSelection;
+      const template = hasSelection ? t("contextSelection") : t("contextNote");
+      text = template.replace("{path}", paths).replace("{chars}", String(chars));
     }
     this.contextEl.setText(text);
   }
@@ -1045,7 +1261,7 @@ Use it as context when answering the user. If their question is unrelated to the
 };
 
 // main.ts
-var LlmChatPlugin = class extends import_obsidian4.Plugin {
+var LlmChatPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.settings = { ...DEFAULT_SETTINGS };

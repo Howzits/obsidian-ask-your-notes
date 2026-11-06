@@ -8,6 +8,7 @@ Chat with any OpenAI-compatible LLM inside Obsidian — **the note you are worki
 
 - 💬 **Sidebar chat** with Markdown-rendered replies (code blocks, tables, lists, math)
 - 📄 **Active note as context** — reads the editor buffer, so unsaved edits are included
+- 🏷️ **@-mention references** — type `@` in the input to reference other notes, or remove the default and chat with no context
 - ✂️ **Selection-aware** — select a passage and only that selection is sent
 - 🌊 **Streaming** responses on desktop with a stop button; graceful fallback to non-streaming on mobile
 - 🔁 **Regenerate**, **copy** or **insert into note** from any reply
@@ -58,6 +59,7 @@ Use **Test connection** to verify before chatting.
 - Open the chat from the ribbon icon, or run **Open LLM chat** from the command palette
 - **Enter** sends, **Shift+Enter** adds a newline (IME composition never sends by accident)
 - The context line above the input shows which note is being sent
+- **Type `@`** in the input to pick another note as context (add several for multi-note context); delete a chip to remove it, and use the ↺ button to return to following the active note
 - Hover a reply to **copy** it, **insert** it at the cursor, or **regenerate**
 - **New chat** clears the conversation
 
@@ -99,6 +101,7 @@ The GitHub Actions workflow builds and attaches `main.js`, `manifest.json`, and 
 
 - 侧边栏聊天，AI 回复以 Markdown 渲染
 - 默认以**当前激活的笔记**为上下文（包含未保存的修改）
+- 在输入框输入 `@` 可引用其他笔记作为上下文（可引用多篇），也可删除默认引用
 - 选中文本时只发送选中部分
 - 桌面端流式输出、可随时停止；移动端自动降级
 - 回复支持复制、插入到笔记光标处、重新生成
@@ -119,6 +122,7 @@ The GitHub Actions workflow builds and attaches `main.js`, `manifest.json`, and 
 - 功能入口：左侧边栏消息图标，或命令面板搜索「打开 LLM 聊天」
 - Enter 发送，Shift+Enter 换行
 - 输入框上方显示当前上下文笔记
+- 在输入框输入 `@` 弹出笔记选择列表，点击即可引用（可引用多篇）；点击 chip 上的 × 移除引用，点 ↺ 恢复默认跟随当前笔记
 - 悬停 AI 回复可复制、插入笔记、重新生成
 
 ### 许可证

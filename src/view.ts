@@ -6,11 +6,13 @@ import {
 	Notice,
 	Platform,
 	setIcon,
+	TFile,
 	WorkspaceLeaf,
 } from "obsidian";
 import type LlmChatPlugin from "../main";
 import { chatCompletion, chatCompletionStream } from "./api";
 import { t } from "./i18n";
+import { NoteSuggest } from "./suggest";
 import type { ChatMessage } from "./types";
 
 export const VIEW_TYPE_CHAT = "llm-note-chat-view";
@@ -31,6 +33,10 @@ function truncate(text: string, max: number): string {
 	return `${text.slice(0, max)}\n\n… (truncated)`;
 }
 
+function noteName(path: string): string {
+	return path.split("/").pop() ?? path;
+}
+
 export class ChatView extends ItemView {
 	private plugin: LlmChatPlugin;
 	private messages: ChatMessage[] = [];
@@ -42,8 +48,15 @@ export class ChatView extends ItemView {
 	private copyText = new WeakMap<HTMLElement, string>();
 	private regenerateButtons: HTMLButtonElement[] = [];
 
+	/** @-mentions: referenced note paths. */
+	private refs: string[] = [];
+	/** When true, the auto "follow active note" chip has been removed/overridden. */
+	private manualMode = false;
+	private noteSuggest: NoteSuggest | null = null;
+
 	private messagesEl!: HTMLElement;
 	private contextEl!: HTMLElement;
+	private chipsRow!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
 	private stopBtn!: HTMLButtonElement;
@@ -73,7 +86,7 @@ export class ChatView extends ItemView {
 		this.initContextView();
 		this.buildUI();
 		this.renderConversation();
-		this.updateContextBar();
+		await this.updateContextBar();
 		this.inputEl.focus();
 
 		this.registerEvent(
@@ -81,12 +94,16 @@ export class ChatView extends ItemView {
 				if (leaf?.view instanceof MarkdownView) {
 					this.lastMarkdownView = leaf.view;
 				}
-				this.updateContextBar();
+				if (!this.manualMode) {
+					this.renderChips();
+				}
+				void this.updateContextBar();
 			})
 		);
 	}
 
 	async onClose(): Promise<void> {
+		this.noteSuggest?.close();
 		this.abortController?.abort();
 	}
 
@@ -95,7 +112,7 @@ export class ChatView extends ItemView {
 		if (this.busy) return;
 		this.buildUI();
 		this.renderConversation();
-		this.updateContextBar();
+		void this.updateContextBar();
 	}
 
 	refreshHeader(): void {
@@ -113,7 +130,7 @@ export class ChatView extends ItemView {
 		this.plugin.history = [];
 		void this.plugin.saveAll();
 		this.renderConversation();
-		this.updateContextBar();
+		void this.updateContextBar();
 		this.inputEl?.focus();
 	}
 
@@ -151,20 +168,28 @@ export class ChatView extends ItemView {
 		this.contextEl = footer.createDiv({ cls: "llm-chat-context" });
 
 		const inputRow = footer.createDiv({ cls: "llm-chat-input-row" });
-		this.inputEl = inputRow.createEl("textarea", {
+		this.chipsRow = inputRow.createDiv({ cls: "llm-chat-chips-row" });
+		const inner = inputRow.createDiv({ cls: "llm-chat-input-inner" });
+		this.inputEl = inner.createEl("textarea", {
 			cls: "llm-chat-input",
 			attr: { placeholder: t("placeholder"), rows: "1" },
 		});
 		this.inputEl.addEventListener("keydown", (evt: KeyboardEvent) => {
 			// isComposing: don't send while an IME candidate window is open
 			if (evt.key === "Enter" && !evt.shiftKey && !evt.isComposing) {
+				// Let the suggestion popover handle Enter when it is open.
+				if (this.noteSuggest?.isOpen) return;
 				evt.preventDefault();
 				void this.send();
 			}
 		});
 		this.inputEl.addEventListener("input", () => this.autoResize());
 
-		const btnCol = inputRow.createDiv({ cls: "llm-chat-btn-col" });
+		this.noteSuggest = new NoteSuggest(this.app, this.inputEl, (file) =>
+			this.addRef(file)
+		);
+
+		const btnCol = inner.createDiv({ cls: "llm-chat-btn-col" });
 		this.sendBtn = btnCol.createEl("button", {
 			cls: "llm-chat-send",
 			attr: { "aria-label": t("send"), title: t("send") },
@@ -181,6 +206,8 @@ export class ChatView extends ItemView {
 		this.stopBtn.addEventListener("click", () =>
 			this.abortController?.abort()
 		);
+
+		this.renderChips();
 	}
 
 	private iconButton(
@@ -196,6 +223,100 @@ export class ChatView extends ItemView {
 		setIcon(button, icon);
 		button.addEventListener("click", onClick);
 		return button;
+	}
+
+	// ---------- Context chips (@-mentions) ----------
+
+	/** Render the chips row above the input. */
+	private renderChips(): void {
+		if (!this.chipsRow) return;
+		this.chipsRow.empty();
+
+		let paths: string[] = [];
+		if (this.manualMode) {
+			paths = [...this.refs];
+		} else {
+			const view = this.getContextView();
+			if (view?.file) paths = [view.file.path];
+		}
+
+		for (const path of paths) {
+			const chip = this.chipsRow.createDiv({
+				cls: "llm-chat-chip-ref",
+				attr: { title: path },
+			});
+			chip.createSpan({
+				cls: "llm-chat-chip-ref-name",
+				text: `@${noteName(path)}`,
+			});
+			const remove = chip.createSpan({
+				cls: "llm-chat-chip-ref-remove",
+				attr: { "aria-label": t("removeRef") },
+			});
+			setIcon(remove, "x");
+			remove.addEventListener("click", (evt) => {
+				evt.stopPropagation();
+				this.removeRef(path);
+			});
+			chip.addEventListener("click", () => this.openRefNote(path));
+		}
+
+		if (this.manualMode) {
+			const reset = this.chipsRow.createEl("button", {
+				cls: "llm-chat-icon-btn llm-chat-chip-reset",
+				attr: { title: t("resetContext"), "aria-label": t("resetContext") },
+			});
+			setIcon(reset, "rotate-ccw");
+			reset.addEventListener("click", () => this.resetRefs());
+		}
+
+		this.chipsRow.toggleClass(
+			"is-hidden",
+			paths.length === 0 && !this.manualMode
+		);
+	}
+
+	private addRef(file: TFile): void {
+		if (!this.manualMode) {
+			this.manualMode = true;
+			this.refs = [];
+		}
+		if (!this.refs.includes(file.path)) this.refs.push(file.path);
+		this.renderChips();
+		void this.updateContextBar();
+		this.inputEl.focus();
+	}
+
+	private removeRef(path: string): void {
+		if (this.manualMode) {
+			this.refs = this.refs.filter((p) => p !== path);
+		} else {
+			// Removing the default chip: switch to manual mode, no refs.
+			this.manualMode = true;
+			this.refs = [];
+		}
+		this.renderChips();
+		void this.updateContextBar();
+	}
+
+	private resetRefs(): void {
+		this.manualMode = false;
+		this.refs = [];
+		this.renderChips();
+		void this.updateContextBar();
+	}
+
+	private openRefNote(path: string): void {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return;
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const view = leaf.view;
+			if (view instanceof MarkdownView && view.file?.path === path) {
+				void this.app.workspace.revealLeaf(leaf);
+				return;
+			}
+		}
+		void this.app.workspace.getLeaf(false).openFile(file);
 	}
 
 	// ---------- Rendering ----------
@@ -344,8 +465,8 @@ export class ChatView extends ItemView {
 		if (this.busy || !last || last.role !== "user") return;
 
 		const settings = this.plugin.settings;
-		const context = this.collectContext();
-		this.updateContextBar(context);
+		const context = await this.collectContext();
+		await this.updateContextBar(context);
 
 		const apiMessages: ChatMessage[] = [];
 		if (settings.systemPrompt.trim()) {
@@ -561,52 +682,109 @@ export class ChatView extends ItemView {
 		return null;
 	}
 
-	private collectContext(): ContextInfo | null {
+	/**
+	 * Resolve the current context. Returns null when there is nothing to
+	 * send. In auto mode the active note (or its selection) is used; in
+	 * manual mode exactly the @-referenced notes are used.
+	 */
+	private async collectContext(): Promise<ContextInfo[] | null> {
 		const settings = this.plugin.settings;
-		if (!settings.includeActiveNote) return null;
 
-		const view = this.getContextView();
-		if (!view || !view.file) return null;
+		let paths: string[];
+		let autoSingle = false;
+		if (this.manualMode) {
+			paths = [...this.refs];
+		} else {
+			if (!settings.includeActiveNote) return null;
+			const view = this.getContextView();
+			if (!view?.file) return null;
+			paths = [view.file.path];
+			autoSingle = true;
+		}
+		if (paths.length === 0) return null;
 
-		const selection = view.editor.getSelection();
-		const useSelection =
-			settings.preferSelection && selection.trim().length > 0;
-		const raw = useSelection ? selection : view.editor.getValue();
+		const infos: ContextInfo[] = [];
+		for (const path of paths) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (!(file instanceof TFile)) continue;
 
-		return {
-			path: view.file.path,
-			content: truncate(raw, settings.maxContextChars),
-			isSelection: useSelection,
-			chars: raw.length,
-		};
+			// Prefer the open editor buffer so unsaved edits are included.
+			let raw = "";
+			for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+				const view = leaf.view;
+				if (view instanceof MarkdownView && view.file?.path === path) {
+					raw = view.editor.getValue();
+					break;
+				}
+			}
+			if (raw === "") {
+				raw = await this.app.vault.cachedRead(file);
+			}
+
+			let isSelection = false;
+			if (autoSingle && settings.preferSelection) {
+				const selection = this.getContextView()?.editor.getSelection() ?? "";
+				if (selection.trim().length > 0) {
+					raw = selection;
+					isSelection = true;
+				}
+			}
+
+			if (!raw.trim()) continue;
+			infos.push({
+				path,
+				content: truncate(raw, settings.maxContextChars),
+				isSelection,
+				chars: raw.length,
+			});
+		}
+		return infos.length > 0 ? infos : null;
 	}
 
-	private buildContextPrompt(context: ContextInfo): string {
-		const body = context.isSelection
-			? "text they selected in it"
-			: "full note content";
-		return `The user is currently working on the note "${context.path}". Here is the ${body} in Markdown:\n\n<note>\n${context.content}\n</note>\n\nUse it as context when answering the user. If their question is unrelated to the note, answer normally.`;
+	private buildContextPrompt(infos: ContextInfo[]): string {
+		if (infos.length === 1 && infos[0].isSelection) {
+			return `The user is currently working on the note "${infos[0].path}". Here is the text they selected in it:\n\n<note>\n${infos[0].content}\n</note>\n\nUse it as context when answering the user. If their question is unrelated to the note, answer normally.`;
+		}
+		const blocks = infos
+			.map(
+				(info) =>
+					`<note path="${info.path}">\n${info.content}\n</note>`
+			)
+			.join("\n\n");
+		const intro =
+			infos.length === 1
+				? `The user is currently working on the note "${infos[0].path}". Here is its Markdown content:`
+				: `The user referenced the following notes as context:`;
+		return `${intro}\n\n${blocks}\n\nUse the note content above as context when answering the user. If their question is unrelated to these notes, answer normally.`;
 	}
 
-	private updateContextBar(context?: ContextInfo | null): void {
+	private async updateContextBar(
+		context?: ContextInfo[] | null
+	): Promise<void> {
 		if (!this.contextEl) return;
 		const settings = this.plugin.settings;
 		let text: string;
 
-		if (!settings.includeActiveNote) {
-			text = t("contextOff");
-		} else {
-			const info = context === undefined ? this.collectContext() : context;
-			if (!info) {
-				text = t("contextNone");
+		const infos =
+			context === undefined ? await this.collectContext() : context;
+		if (!infos) {
+			if (this.manualMode) {
+				text = t("contextManualEmpty");
+			} else if (!settings.includeActiveNote) {
+				text = t("contextOff");
 			} else {
-				const template = info.isSelection
-					? t("contextSelection")
-					: t("contextNote");
-				text = template
-					.replace("{path}", info.path)
-					.replace("{chars}", String(info.chars));
+				text = t("contextNone");
 			}
+		} else {
+			const paths = infos.map((info) => info.path).join("、");
+			const chars = infos.reduce((sum, info) => sum + info.chars, 0);
+			const hasSelection = infos.length === 1 && infos[0].isSelection;
+			const template = hasSelection
+				? t("contextSelection")
+				: t("contextNote");
+			text = template
+				.replace("{path}", paths)
+				.replace("{chars}", String(chars));
 		}
 		this.contextEl.setText(text);
 	}
