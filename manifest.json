@@ -1,7 +1,7 @@
 {
   "id": "ask-your-notes",
   "name": "Ask Your Notes",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "1.5.0",
   "description": "Chat with any OpenAI-compatible LLM using the active note as context. Streaming, selection-aware, with copy, insert and regenerate actions.",
   "author": "Howzits",

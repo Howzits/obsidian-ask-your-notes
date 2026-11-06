@@ -8,7 +8,6 @@ import { AbstractInputSuggest, App, TFile } from "obsidian";
 export class NoteSuggest extends AbstractInputSuggest<TFile> {
 	private input: HTMLTextAreaElement;
 	private onSelectFile: (file: TFile) => void;
-	private openState = false;
 
 	constructor(
 		app: App,
@@ -22,18 +21,20 @@ export class NoteSuggest extends AbstractInputSuggest<TFile> {
 	}
 
 	/** Whether the suggestion popover is currently open. */
-	get isOpen(): boolean {
-		return this.openState;
+	get popoverOpen(): boolean {
+		// PopoverSuggest tracks its own isOpen state at runtime, but it is
+		// not part of the public typings, so read it via a cast.
+		return (this as unknown as { isOpen: boolean }).isOpen;
 	}
 
-	override open(): void {
-		this.openState = true;
-		super.open();
+	// Obsidian reads non-<input> elements via innerText, which is always
+	// empty for a <textarea>. Override both accessors to use .value.
+	override getValue(): string {
+		return this.input.value;
 	}
 
-	override close(): void {
-		this.openState = false;
-		super.close();
+	override setValue(value: string): void {
+		this.input.value = value;
 	}
 
 	getSuggestions(query: string): TFile[] {

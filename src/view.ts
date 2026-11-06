@@ -178,7 +178,7 @@ export class ChatView extends ItemView {
 			// isComposing: don't send while an IME candidate window is open
 			if (evt.key === "Enter" && !evt.shiftKey && !evt.isComposing) {
 				// Let the suggestion popover handle Enter when it is open.
-				if (this.noteSuggest?.isOpen) return;
+				if (this.noteSuggest?.popoverOpen) return;
 				evt.preventDefault();
 				void this.send();
 			}

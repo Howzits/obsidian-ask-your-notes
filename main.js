@@ -530,22 +530,21 @@ var import_obsidian3 = require("obsidian");
 var NoteSuggest = class extends import_obsidian3.AbstractInputSuggest {
   constructor(app, input, onSelectFile) {
     super(app, input);
-    this.openState = false;
     this.input = input;
     this.onSelectFile = onSelectFile;
     this.limit = 8;
   }
   /** Whether the suggestion popover is currently open. */
-  get isOpen() {
-    return this.openState;
+  get popoverOpen() {
+    return this.isOpen;
   }
-  open() {
-    this.openState = true;
-    super.open();
+  // Obsidian reads non-<input> elements via innerText, which is always
+  // empty for a <textarea>. Override both accessors to use .value.
+  getValue() {
+    return this.input.value;
   }
-  close() {
-    this.openState = false;
-    super.close();
+  setValue(value) {
+    this.input.value = value;
   }
   getSuggestions(query) {
     const match = /(?:^|\s)@([^\s]*)$/.exec(query);
@@ -699,7 +698,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.inputEl.addEventListener("keydown", (evt) => {
       var _a;
       if (evt.key === "Enter" && !evt.shiftKey && !evt.isComposing) {
-        if ((_a = this.noteSuggest) == null ? void 0 : _a.isOpen) return;
+        if ((_a = this.noteSuggest) == null ? void 0 : _a.popoverOpen) return;
         evt.preventDefault();
         void this.send();
       }
