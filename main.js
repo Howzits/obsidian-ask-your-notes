@@ -282,19 +282,26 @@ function withAbort(promise, signal) {
   });
 }
 async function chatCompletion(options) {
-  var _a, _b, _c, _d, _e;
+  var _a;
   if ((_a = options.signal) == null ? void 0 : _a.aborted) throw new DOMException("Aborted", "AbortError");
-  const response = await withAbort((0, import_obsidian2.requestUrl)({
-    url: options.endpoint,
-    method: "POST",
-    headers: buildHeaders(options.apiKey),
-    body: buildBody(options, false),
-    throw: false
-  }), options.signal);
+  const response = await withAbort(
+    (0, import_obsidian2.requestUrl)({
+      url: options.endpoint,
+      method: "POST",
+      headers: buildHeaders(options.apiKey),
+      body: buildBody(options, false),
+      throw: false
+    }),
+    options.signal
+  );
   if (response.status < 200 || response.status >= 300) {
     throw new Error(parseError(response.status, response.text));
   }
-  const content = (_e = (_d = (_c = (_b = response.json) == null ? void 0 : _b.choices) == null ? void 0 : _c[0]) == null ? void 0 : _d.message) == null ? void 0 : _e.content;
+  const json = response.json;
+  const choices = typeof json === "object" && json !== null && "choices" in json ? json.choices : void 0;
+  const first = Array.isArray(choices) ? choices[0] : void 0;
+  const message = typeof first === "object" && first !== null && "message" in first ? first.message : void 0;
+  const content = typeof message === "object" && message !== null && "content" in message ? message.content : void 0;
   if (typeof content !== "string" || content.length === 0) {
     throw new Error("Empty response from the API");
   }
@@ -326,7 +333,9 @@ async function chatCompletionStream(options) {
     if (data === "[DONE]") return true;
     let parsed;
     try {
-      parsed = JSON.parse(data);
+      const decoded = JSON.parse(data);
+      if (typeof decoded !== "object" || decoded === null) return false;
+      parsed = decoded;
     } catch (e) {
       return false;
     }
@@ -425,184 +434,293 @@ var LlmChatSettingsTab = class extends import_obsidian3.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.addClass("llm-chat-settings");
-    containerEl.createEl("h2", { text: t("settingsTitle") });
-    containerEl.createEl("h3", { text: t("sectionApi") });
-    new import_obsidian3.Setting(containerEl).setName(t("provider")).setDesc(t("providerDesc")).addDropdown((dropdown) => {
-      for (const id of PROVIDER_ORDER) {
-        dropdown.addOption(id, PROVIDERS[id].label);
+  getSettingDefinitions() {
+    return [
+      {
+        type: "group",
+        heading: t("sectionApi"),
+        items: [
+          {
+            name: t("provider"),
+            desc: t("providerDesc"),
+            render: (setting) => {
+              setting.addDropdown((dropdown) => {
+                for (const id of PROVIDER_ORDER) {
+                  dropdown.addOption(id, PROVIDERS[id].label);
+                }
+                dropdown.setValue(this.plugin.settings.provider);
+                dropdown.onChange(async (value) => {
+                  var _a;
+                  const id = value;
+                  if (id !== this.plugin.settings.provider)
+                    this.plugin.settings.apiKey = "";
+                  this.plugin.settings.provider = id;
+                  const preset = PROVIDERS[id];
+                  if (id !== "custom") {
+                    this.plugin.settings.apiEndpoint = preset.endpoint;
+                    this.plugin.settings.model = preset.model;
+                  }
+                  await this.plugin.saveAll();
+                  this.update();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
+                });
+              });
+            }
+          },
+          {
+            name: t("apiEndpoint"),
+            desc: t("apiEndpointDesc"),
+            render: (setting) => {
+              setting.addText(
+                (text) => text.setPlaceholder("https://api.openai.com/v1/chat/completions").setValue(this.plugin.settings.apiEndpoint).onChange(async (value) => {
+                  this.plugin.settings.apiEndpoint = value.trim();
+                  await this.plugin.saveAll();
+                })
+              );
+            }
+          },
+          {
+            name: t("apiKey"),
+            desc: t("apiKeyDesc"),
+            render: (setting) => {
+              setting.addText((text) => {
+                text.inputEl.type = "password";
+                text.setPlaceholder("sk-\u2026").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
+                  this.plugin.settings.apiKey = value.trim();
+                  await this.plugin.saveAll();
+                });
+              });
+            }
+          },
+          {
+            name: t("model"),
+            desc: t("modelDesc"),
+            render: (setting) => {
+              setting.addText(
+                (text) => text.setPlaceholder("deepseek-chat").setValue(this.plugin.settings.model).onChange(async (value) => {
+                  var _a;
+                  this.plugin.settings.model = value.trim();
+                  await this.plugin.saveAll();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
+                })
+              );
+            }
+          },
+          {
+            name: t("testConnection"),
+            desc: t("testConnectionDesc"),
+            render: (setting) => {
+              const connectionResult = setting.descEl.createDiv({
+                attr: { role: "status", "aria-live": "polite" }
+              });
+              setting.addButton(
+                (button) => button.setButtonText(t("test")).onClick(async () => {
+                  const settings = { ...this.plugin.settings };
+                  if (!settings.apiEndpoint || !settings.model) {
+                    new import_obsidian3.Notice(t("testNeedConfig"));
+                    return;
+                  }
+                  if (PROVIDERS[settings.provider].keyRequired && !settings.apiKey) {
+                    connectionResult.setText(t("needApiKey"));
+                    return;
+                  }
+                  button.setButtonText(t("testing"));
+                  button.setDisabled(true);
+                  connectionResult.setText(t("testing"));
+                  const controller = new AbortController();
+                  const timeout = window.setTimeout(
+                    () => controller.abort(),
+                    2e4
+                  );
+                  try {
+                    await chatCompletion({
+                      endpoint: settings.apiEndpoint,
+                      apiKey: settings.apiKey,
+                      model: settings.model,
+                      messages: [{ role: "user", content: "ping" }],
+                      temperature: 0,
+                      maxTokens: 16,
+                      signal: controller.signal
+                    });
+                    new import_obsidian3.Notice(`\u2705 ${t("testOk")}`);
+                    connectionResult.setText(t("testOk"));
+                  } catch (error) {
+                    const message = controller.signal.aborted ? t("requestTimeout") : error instanceof Error ? error.message : String(error);
+                    new import_obsidian3.Notice(`\u274C ${t("testFail")}: ${message}`);
+                    connectionResult.setText(`${t("testFail")}: ${message}`);
+                  } finally {
+                    window.clearTimeout(timeout);
+                    button.setButtonText(t("test"));
+                    button.setDisabled(false);
+                  }
+                })
+              );
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: t("sectionGeneration"),
+        items: [
+          {
+            name: t("systemPrompt"),
+            desc: t("systemPromptDesc"),
+            render: (setting) => {
+              setting.addTextArea((area) => {
+                area.inputEl.rows = 4;
+                area.inputEl.addClass("llm-chat-settings-textarea");
+                area.setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
+                  this.plugin.settings.systemPrompt = value;
+                  await this.plugin.saveAll();
+                });
+              });
+            }
+          },
+          {
+            name: t("temperature"),
+            desc: t("temperatureDesc"),
+            render: (setting) => {
+              setting.addSlider(
+                (slider) => slider.setLimits(0, 2, 0.1).setValue(this.plugin.settings.temperature).onChange(async (value) => {
+                  this.plugin.settings.temperature = value;
+                  await this.plugin.saveAll();
+                })
+              );
+            }
+          },
+          {
+            name: t("maxTokens"),
+            desc: t("maxTokensDesc"),
+            render: (setting) => {
+              setting.addText(
+                (text) => text.setPlaceholder("0").setValue(
+                  this.plugin.settings.maxTokens > 0 ? String(this.plugin.settings.maxTokens) : ""
+                ).onChange(async (value) => {
+                  const parsed = parseInt(value, 10);
+                  this.plugin.settings.maxTokens = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+                  await this.plugin.saveAll();
+                })
+              );
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: t("sectionContext"),
+        items: [
+          {
+            name: t("includeActiveNote"),
+            desc: t("includeActiveNoteDesc"),
+            render: (setting) => {
+              setting.addToggle(
+                (toggle) => toggle.setValue(this.plugin.settings.includeActiveNote).onChange(async (value) => {
+                  var _a;
+                  this.plugin.settings.includeActiveNote = value;
+                  await this.plugin.saveAll();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
+                })
+              );
+            }
+          },
+          {
+            name: t("preferSelection"),
+            desc: t("preferSelectionDesc"),
+            render: (setting) => {
+              setting.addToggle(
+                (toggle) => toggle.setValue(this.plugin.settings.preferSelection).onChange(async (value) => {
+                  var _a;
+                  this.plugin.settings.preferSelection = value;
+                  await this.plugin.saveAll();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
+                })
+              );
+            }
+          },
+          {
+            name: t("maxContextChars"),
+            desc: t("maxContextCharsDesc"),
+            render: (setting) => {
+              setting.addText(
+                (text) => text.setValue(String(this.plugin.settings.maxContextChars)).onChange(async (value) => {
+                  var _a;
+                  const parsed = parseInt(value, 10);
+                  if (Number.isFinite(parsed) && parsed > 0) {
+                    this.plugin.settings.maxContextChars = parsed;
+                    await this.plugin.saveAll();
+                    (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
+                  }
+                })
+              );
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: t("sectionBehavior"),
+        items: [
+          {
+            name: t("stream"),
+            desc: t("streamDesc"),
+            render: (setting) => {
+              setting.addToggle(
+                (toggle) => toggle.setValue(this.plugin.settings.stream).onChange(async (value) => {
+                  this.plugin.settings.stream = value;
+                  await this.plugin.saveAll();
+                })
+              );
+            }
+          },
+          {
+            name: t("persistHistory"),
+            desc: t("persistHistoryDesc"),
+            render: (setting) => {
+              setting.addToggle(
+                (toggle) => toggle.setValue(this.plugin.settings.persistHistory).onChange(async (value) => {
+                  this.plugin.settings.persistHistory = value;
+                  if (!value) this.plugin.history = [];
+                  await this.plugin.saveAll();
+                })
+              );
+            }
+          },
+          {
+            name: t("language"),
+            render: (setting) => {
+              setting.addDropdown(
+                (dropdown) => dropdown.addOption("auto", t("languageAuto")).addOption("en", t("languageEn")).addOption("zh", t("languageZh")).setValue(this.plugin.settings.language).onChange(async (value) => {
+                  var _a;
+                  this.plugin.settings.language = value;
+                  this.plugin.applyLanguage();
+                  await this.plugin.saveAll();
+                  this.update();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.rebuildUI();
+                })
+              );
+            }
+          },
+          {
+            name: t("resetDefaults"),
+            desc: t("resetDefaultsDesc"),
+            render: (setting) => {
+              setting.addButton(
+                (button) => button.setButtonText(t("reset")).setDestructive().onClick(async () => {
+                  var _a;
+                  this.plugin.settings = { ...DEFAULT_SETTINGS };
+                  this.plugin.applyLanguage();
+                  await this.plugin.saveAll();
+                  this.update();
+                  (_a = this.plugin.getView()) == null ? void 0 : _a.rebuildUI();
+                  new import_obsidian3.Notice(t("resetDone"));
+                })
+              );
+            }
+          }
+        ]
       }
-      dropdown.setValue(this.plugin.settings.provider);
-      dropdown.onChange(async (value) => {
-        var _a;
-        const id = value;
-        if (id !== this.plugin.settings.provider) this.plugin.settings.apiKey = "";
-        this.plugin.settings.provider = id;
-        const preset = PROVIDERS[id];
-        if (id !== "custom") {
-          this.plugin.settings.apiEndpoint = preset.endpoint;
-          this.plugin.settings.model = preset.model;
-        }
-        await this.plugin.saveAll();
-        this.display();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
-      });
-    });
-    new import_obsidian3.Setting(containerEl).setName(t("apiEndpoint")).setDesc(t("apiEndpointDesc")).addText(
-      (text) => text.setPlaceholder(
-        "https://api.openai.com/v1/chat/completions"
-      ).setValue(this.plugin.settings.apiEndpoint).onChange(async (value) => {
-        this.plugin.settings.apiEndpoint = value.trim();
-        await this.plugin.saveAll();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("apiKey")).setDesc(t("apiKeyDesc")).addText((text) => {
-      text.inputEl.type = "password";
-      text.setPlaceholder("sk-\u2026").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
-        this.plugin.settings.apiKey = value.trim();
-        await this.plugin.saveAll();
-      });
-    });
-    new import_obsidian3.Setting(containerEl).setName(t("model")).setDesc(t("modelDesc")).addText(
-      (text) => text.setPlaceholder("deepseek-chat").setValue(this.plugin.settings.model).onChange(async (value) => {
-        var _a;
-        this.plugin.settings.model = value.trim();
-        await this.plugin.saveAll();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
-      })
-    );
-    const connectionResult = containerEl.createDiv({ cls: "llm-chat-connection-result", attr: { role: "status", "aria-live": "polite" } });
-    new import_obsidian3.Setting(containerEl).setName(t("testConnection")).setDesc(t("testConnectionDesc")).addButton(
-      (button) => button.setButtonText(t("test")).onClick(async () => {
-        const settings = { ...this.plugin.settings };
-        if (!settings.apiEndpoint || !settings.model) {
-          new import_obsidian3.Notice(t("testNeedConfig"));
-          return;
-        }
-        if (PROVIDERS[settings.provider].keyRequired && !settings.apiKey) {
-          connectionResult.setText(t("needApiKey"));
-          return;
-        }
-        button.setButtonText(t("testing"));
-        button.setDisabled(true);
-        connectionResult.setText(t("testing"));
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 2e4);
-        try {
-          await chatCompletion({
-            endpoint: settings.apiEndpoint,
-            apiKey: settings.apiKey,
-            model: settings.model,
-            messages: [{ role: "user", content: "ping" }],
-            temperature: 0,
-            maxTokens: 16,
-            signal: controller.signal
-          });
-          new import_obsidian3.Notice(`\u2705 ${t("testOk")}`);
-          connectionResult.setText(t("testOk"));
-        } catch (error) {
-          const message = controller.signal.aborted ? t("requestTimeout") : error instanceof Error ? error.message : String(error);
-          new import_obsidian3.Notice(`\u274C ${t("testFail")}: ${message}`);
-          connectionResult.setText(`${t("testFail")}: ${message}`);
-        } finally {
-          window.clearTimeout(timeout);
-          button.setButtonText(t("test"));
-          button.setDisabled(false);
-        }
-      })
-    );
-    containerEl.createEl("h3", { text: t("sectionGeneration") });
-    new import_obsidian3.Setting(containerEl).setName(t("systemPrompt")).setDesc(t("systemPromptDesc")).addTextArea((area) => {
-      area.inputEl.rows = 4;
-      area.inputEl.addClass("llm-chat-settings-textarea");
-      area.setValue(this.plugin.settings.systemPrompt).onChange(
-        async (value) => {
-          this.plugin.settings.systemPrompt = value;
-          await this.plugin.saveAll();
-        }
-      );
-    });
-    new import_obsidian3.Setting(containerEl).setName(t("temperature")).setDesc(t("temperatureDesc")).addSlider(
-      (slider) => slider.setLimits(0, 2, 0.1).setDynamicTooltip().setValue(this.plugin.settings.temperature).onChange(async (value) => {
-        this.plugin.settings.temperature = value;
-        await this.plugin.saveAll();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("maxTokens")).setDesc(t("maxTokensDesc")).addText(
-      (text) => text.setPlaceholder("0").setValue(
-        this.plugin.settings.maxTokens > 0 ? String(this.plugin.settings.maxTokens) : ""
-      ).onChange(async (value) => {
-        const parsed = parseInt(value, 10);
-        this.plugin.settings.maxTokens = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-        await this.plugin.saveAll();
-      })
-    );
-    containerEl.createEl("h3", { text: t("sectionContext") });
-    new import_obsidian3.Setting(containerEl).setName(t("includeActiveNote")).setDesc(t("includeActiveNoteDesc")).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.includeActiveNote).onChange(async (value) => {
-        var _a;
-        this.plugin.settings.includeActiveNote = value;
-        await this.plugin.saveAll();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("preferSelection")).setDesc(t("preferSelectionDesc")).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.preferSelection).onChange(async (value) => {
-        var _a;
-        this.plugin.settings.preferSelection = value;
-        await this.plugin.saveAll();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("maxContextChars")).setDesc(t("maxContextCharsDesc")).addText(
-      (text) => text.setValue(String(this.plugin.settings.maxContextChars)).onChange(async (value) => {
-        var _a;
-        const parsed = parseInt(value, 10);
-        if (Number.isFinite(parsed) && parsed > 0) {
-          this.plugin.settings.maxContextChars = parsed;
-          await this.plugin.saveAll();
-          (_a = this.plugin.getView()) == null ? void 0 : _a.refreshHeader();
-        }
-      })
-    );
-    containerEl.createEl("h3", { text: t("sectionBehavior") });
-    new import_obsidian3.Setting(containerEl).setName(t("stream")).setDesc(t("streamDesc")).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.stream).onChange(async (value) => {
-        this.plugin.settings.stream = value;
-        await this.plugin.saveAll();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("persistHistory")).setDesc(t("persistHistoryDesc")).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.persistHistory).onChange(async (value) => {
-        this.plugin.settings.persistHistory = value;
-        if (!value) this.plugin.history = [];
-        await this.plugin.saveAll();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("language")).addDropdown(
-      (dropdown) => dropdown.addOption("auto", t("languageAuto")).addOption("en", t("languageEn")).addOption("zh", t("languageZh")).setValue(this.plugin.settings.language).onChange(async (value) => {
-        var _a;
-        this.plugin.settings.language = value;
-        this.plugin.applyLanguage();
-        await this.plugin.saveAll();
-        this.display();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.rebuildUI();
-      })
-    );
-    new import_obsidian3.Setting(containerEl).setName(t("resetDefaults")).setDesc(t("resetDefaultsDesc")).addButton(
-      (button) => button.setButtonText(t("reset")).setWarning().onClick(async () => {
-        var _a;
-        this.plugin.settings = { ...DEFAULT_SETTINGS };
-        this.plugin.applyLanguage();
-        await this.plugin.saveAll();
-        this.display();
-        (_a = this.plugin.getView()) == null ? void 0 : _a.rebuildUI();
-        new import_obsidian3.Notice(t("resetDone"));
-      })
-    );
+    ];
   }
 };
 
@@ -1301,19 +1419,7 @@ var ChatView = class extends import_obsidian5.ItemView {
       await navigator.clipboard.writeText(text);
       new import_obsidian5.Notice(t("copied"));
     } catch (e) {
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        const ok = document.execCommand("copy");
-        textarea.remove();
-        new import_obsidian5.Notice(ok ? t("copied") : t("copyFailed"));
-      } catch (e2) {
-        new import_obsidian5.Notice(t("copyFailed"));
-      }
+      new import_obsidian5.Notice(t("copyFailed"));
     }
   }
   insertBubble(bubble) {
@@ -1478,11 +1584,11 @@ ${t("contextPrivacy")}`;
   }
   autoResize() {
     if (!this.inputEl) return;
-    this.inputEl.style.height = "auto";
-    this.inputEl.style.height = `${Math.min(
+    this.inputEl.setCssProps({ "--llm-chat-input-height": "auto" });
+    this.inputEl.setCssProps({ "--llm-chat-input-height": `${Math.min(
       this.inputEl.scrollHeight,
       160
-    )}px`;
+    )}px` });
   }
 };
 

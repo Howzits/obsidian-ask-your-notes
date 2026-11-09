@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-09
+
+### Fixed
+
+- Community-review blockers: manual settings headings and direct element style assignments.
+- Deprecated settings APIs, clipboard fallback, unsafe API response access, and CSS important declarations.
+
+### Changed
+
+- All settings use searchable declarative definitions and native group headings.
+- Release CI checks the blocking Obsidian ESLint rules and generates artifact provenance attestations.
+- Build uses Node's built-in module list instead of the deprecated builtin-modules dependency.
+
 ## [1.3.0] - 2026-11-09
 
 ### Added
@@ -55,7 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release: sidebar chat view with LLM API integration, active note as default context, streaming replies with stop support
 
-[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.0...HEAD
+[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.1...HEAD
+[1.3.1]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.0...1.3.1
 [1.3.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.1...1.3.0
 [1.2.1]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.0...1.2.1
 [1.2.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.1.0...1.2.0

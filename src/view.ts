@@ -731,19 +731,7 @@ export class ChatView extends ItemView {
 			await navigator.clipboard.writeText(text);
 			new Notice(t("copied"));
 		} catch {
-			try {
-				const textarea = document.createElement("textarea");
-				textarea.value = text;
-				textarea.style.position = "fixed";
-				textarea.style.opacity = "0";
-				document.body.appendChild(textarea);
-				textarea.select();
-				const ok = document.execCommand("copy");
-				textarea.remove();
-				new Notice(ok ? t("copied") : t("copyFailed"));
-			} catch {
-				new Notice(t("copyFailed"));
-			}
+			new Notice(t("copyFailed"));
 		}
 	}
 
@@ -931,10 +919,10 @@ export class ChatView extends ItemView {
 
 	private autoResize(): void {
 		if (!this.inputEl) return;
-		this.inputEl.style.height = "auto";
-		this.inputEl.style.height = `${Math.min(
+		this.inputEl.setCssProps({ "--llm-chat-input-height": "auto" });
+		this.inputEl.setCssProps({ "--llm-chat-input-height": `${Math.min(
 			this.inputEl.scrollHeight,
 			160
-		)}px`;
+		)}px` });
 	}
 }

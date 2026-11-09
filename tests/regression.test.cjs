@@ -68,6 +68,7 @@ function fixture() {
   const dom = new JSDOM('<body></body>');
   const { document, HTMLElement, Event } = dom.window;
   Object.assign(HTMLElement.prototype, {
+	setCssProps(props) { for (const [key, value] of Object.entries(props)) this.style.setProperty(key, value); },
     empty() { this.replaceChildren(); }, setText(text) { this.textContent = text; },
     addClass(cls) { this.classList.add(cls); }, removeClass(cls) { this.classList.remove(cls); },
     toggleClass(cls, on) { this.classList.toggle(cls, on); },
@@ -208,4 +209,15 @@ test('history saves are ordered snapshots and obey persistence setting', async (
   assert.equal(saved[0].history[0].content, 'first'); gate.resolve(); await Promise.all([first, second]);
   assert.equal(saved[1].history[0].content, 'second');
   plugin.settings.persistHistory = false; await plugin.saveAll(); assert.equal(saved[2].history.length, 0);
+});
+
+test('settings expose all 15 searchable rows in four native groups', () => {
+  const { LlmChatSettingsTab } = load('src/settings.ts', { PluginSettingTab: class {} });
+  const tab = new LlmChatSettingsTab({}, { settings: {}, saveAll: async () => {} });
+  const groups = tab.getSettingDefinitions();
+  assert.equal(groups.length, 4);
+  const rows = groups.flatMap(group => group.items);
+  assert.equal(rows.length, 15);
+  assert.equal(new Set(rows.map(row => row.name)).size, 15);
+  assert.ok(rows.every(row => typeof row.render === 'function' && row.name.length > 0));
 });
