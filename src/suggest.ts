@@ -8,6 +8,7 @@ import { AbstractInputSuggest, App, TFile } from "obsidian";
 export class NoteSuggest extends AbstractInputSuggest<TFile> {
 	private input: HTMLTextAreaElement;
 	private onSelectFile: (file: TFile) => void;
+	private visible = false;
 
 	constructor(
 		app: App,
@@ -22,10 +23,11 @@ export class NoteSuggest extends AbstractInputSuggest<TFile> {
 
 	/** Whether the suggestion popover is currently open. */
 	get popoverOpen(): boolean {
-		// PopoverSuggest tracks its own isOpen state at runtime, but it is
-		// not part of the public typings, so read it via a cast.
-		return (this as unknown as { isOpen: boolean }).isOpen;
+		return this.visible;
 	}
+
+	override open(): void { super.open(); this.visible = true; }
+	override close(): void { super.close(); this.visible = false; }
 
 	// Obsidian reads non-<input> elements via innerText, which is always
 	// empty for a <textarea>. Override both accessors to use .value.
@@ -38,7 +40,8 @@ export class NoteSuggest extends AbstractInputSuggest<TFile> {
 	}
 
 	getSuggestions(query: string): TFile[] {
-		const match = /(?:^|\s)@([^\s]*)$/.exec(query);
+		const prefix = query.slice(0, this.input.selectionStart ?? query.length);
+		const match = /(?:^|\s)@([^\n@]*)$/.exec(prefix);
 		if (!match) return [];
 		const term = match[1].toLowerCase();
 		const files = this.app.vault.getMarkdownFiles();
@@ -64,8 +67,12 @@ export class NoteSuggest extends AbstractInputSuggest<TFile> {
 	selectSuggestion(file: TFile, _evt: MouseEvent | KeyboardEvent): void {
 		// Strip the trailing "@query" token from the input, keep the rest.
 		const value = this.input.value;
-		const idx = value.lastIndexOf("@");
-		this.input.value = idx >= 0 ? value.slice(0, idx) : "";
+		const cursor = this.input.selectionStart ?? value.length;
+		const idx = value.lastIndexOf("@", cursor);
+		if (idx < 0) return;
+		this.input.value = value.slice(0, idx) + value.slice(cursor);
+		this.input.setSelectionRange(idx, idx);
+		this.close();
 		this.input.dispatchEvent(new Event("input"));
 		this.onSelectFile(file);
 	}

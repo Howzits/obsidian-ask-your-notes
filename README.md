@@ -1,182 +1,158 @@
 <p align="center">
-  <img src="assets/logo.svg" width="128" alt="Ask Your Notes logo" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg" />
+    <img src="assets/logo.svg" width="112" height="112" alt="Ask Your Notes: a folded note with a conversation tail" />
+  </picture>
 </p>
 
 <h1 align="center">Ask Your Notes</h1>
 
 <p align="center">
-  <strong>Chat with your notes, inside Obsidian.</strong><br/>
-  An LLM chat panel for <a href="https://obsidian.md/">Obsidian</a> that sends the note you're working on
-  as context — or any note you <code>@</code>-mention. Works with DeepSeek, OpenAI, OpenRouter,
-  Ollama and any OpenAI-compatible API.
+  <strong>Read, question, and develop your notes without leaving Obsidian.</strong><br />
+  Bring a note, a selected passage, or a few references into a sidebar conversation.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Howzits/obsidian-ask-your-notes/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/Howzits/obsidian-ask-your-notes?style=flat-square&color=7C3AED"></a>
-  <a href="https://github.com/Howzits/obsidian-ask-your-notes/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/Howzits/obsidian-ask-your-notes?style=flat-square&color=7C3AED"></a>
-  <a href="https://github.com/Howzits/obsidian-ask-your-notes/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Howzits/obsidian-ask-your-notes?style=flat-square&color=7C3AED&label=stars"></a>
-  <a href="https://obsidian.md/"><img alt="Obsidian" src="https://img.shields.io/badge/Obsidian-1.5.0%2B-7C3AED?style=flat-square"></a>
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="https://github.com/Howzits/obsidian-ask-your-notes/releases/latest">Download</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#privacy-and-data">Privacy</a> ·
+  <a href="https://github.com/Howzits/obsidian-ask-your-notes/issues">Report an issue</a>
 </p>
 
-## ✨ Features
+Summarize a note, explain a difficult passage, compare ideas across referenced notes, or turn rough thoughts into an outline. Choose what to attach, review the references above the input, and send your question.
 
-- 💬 **Chat panel in the sidebar** — replies rendered as Markdown (code blocks, tables, lists, math)
-- 📄 **Active note as context** — reads the editor buffer, so unsaved edits are included
-- 🏷️ **`@`-mention any note** — reference other notes, several at once, or none at all
-- ✂️ **Selection-aware** — select a passage and only that selection is sent
-- 🌊 **Streaming replies** with a stop button; graceful fallback to non-streaming on mobile
-- 🔁 **Regenerate, copy or insert** any reply into the current note
-- 🧠 **Persistent history** across restarts (configurable)
-- 🔌 **Provider presets** — DeepSeek, OpenAI, OpenRouter, Ollama (local), or any custom endpoint
-- 🌍 **English / 中文** UI, auto-detected from your system language
-- 🔒 Your API key stays in local plugin data — it only ever goes to the API you configure
+The plugin connects Obsidian to an OpenAI-compatible chat API. You supply the model connection, using a provider preset or your own endpoint. It does not automatically search or index your entire vault.
 
-## 📸 Screenshot
+> This README describes the current source. Check the [release notes](https://github.com/Howzits/obsidian-ask-your-notes/releases) for features available in your installed version.
 
-![Ask Your Notes chat panel](assets/screenshot.png)
+## Features
 
-## 🚀 Installation
+- **Active note or selection.** Include unsaved editor changes; in automatic mode, send a selected passage instead of the whole note.
+- **References with `@`.** Attach multiple Markdown notes, remove individual references, or chat without attaching notes.
+- **Replies you can use.** Render Markdown, tables, code, and math. Copy a reply, insert it at the note editor's selection or cursor, or regenerate the latest answer.
+- **Visible request status.** See when notes are being read or a reply is generating. Stop generation or retry after a failed request.
+- **Fits your workspace.** Colors, fonts, icons, and main control radii follow Obsidian's theme. English and Chinese interfaces are included.
+- **Optional local history.** Resume the last conversation after restarting Obsidian.
 
-### Community plugins (marketplace)
+## Preview
 
-🚧 Submitting to the Obsidian community plugin marketplace — coming soon.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-dark.png" />
+  <img src="assets/screenshot.png" width="540" alt="Ask Your Notes sidebar showing a demo reading workflow, a Markdown table, reply actions, and the message input" />
+</picture>
+
+Captured in Obsidian using a demo conversation, with no private notes or API requests. The preview follows your light or dark mode; appearance varies by theme.
+
+## Installation
+
+Until the plugin is available in the community directory, use BRAT or install a release manually.
 
 ### BRAT
 
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
-2. *Add a beta plugin* → paste `Howzits/obsidian-ask-your-notes`
+1. Install and enable [BRAT](https://github.com/TfTHacker/obsidian42-brat).
+2. Choose **Add a beta plugin** and enter `Howzits/obsidian-ask-your-notes`.
+3. Enable **Ask Your Notes** under **Settings → Community plugins** if needed.
 
-### Manual
+### Manual installation
 
-1. Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Howzits/obsidian-ask-your-notes/releases/latest)
-2. Copy them into `<vault>/.obsidian/plugins/ask-your-notes/`
-3. Reload Obsidian and enable **Ask Your Notes** under *Settings → Community plugins*
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Howzits/obsidian-ask-your-notes/releases/latest).
+2. Create `<vault>/.obsidian/plugins/ask-your-notes/` and place all three files there.
+3. Reload Obsidian and enable **Ask Your Notes** under **Settings → Community plugins**.
 
-### From source
+Use the release attachments, rather than GitHub's source-code ZIP. To build from source, see [Development](#development).
 
-```bash
-git clone https://github.com/Howzits/obsidian-ask-your-notes.git
-cd obsidian-ask-your-notes
-npm install
-npm run build
-```
+## Quick start
 
-Then copy the three files as above.
+1. Open **Settings → Ask Your Notes** and choose a provider.
+2. Enter its API key if required, confirm the endpoint and model, and select **Test connection**. The test sends a small request and may consume API quota.
+3. Open a Markdown note, then open **Ask Your Notes** from the ribbon icon or command palette.
+4. Check the references above the input. Ask “Summarize this note in five points,” then press `Enter`.
 
-## ⚙️ Configuration
+For Ollama, start the local service and install a model first. Use a model name available on that service. `localhost` refers to the device running Obsidian.
 
-Open *Settings → Ask Your Notes* and pick a provider:
+### Connection presets
 
-| Provider | Endpoint | Example model |
+These are the defaults in the code, rather than model recommendations. Endpoints and model IDs are editable; availability depends on your provider and account.
+
+| Preset | Chat completions endpoint | Default model |
 | --- | --- | --- |
 | DeepSeek | `https://api.deepseek.com/chat/completions` | `deepseek-chat` |
 | OpenAI | `https://api.openai.com/v1/chat/completions` | `gpt-4o-mini` |
 | OpenRouter | `https://openrouter.ai/api/v1/chat/completions` | `openai/gpt-4o-mini` |
-| Ollama (local) | `http://localhost:11434/v1/chat/completions` | `llama3.1` |
-| Custom | any OpenAI-compatible endpoint | any |
+| Ollama | `http://localhost:11434/v1/chat/completions` | `llama3.1` |
+| Custom | Your full OpenAI-compatible chat completions URL | Your model ID |
 
-Use **Test connection** to verify before chatting.
+Use the full chat completions URL, not just the base URL. Switching provider presets clears the previous API key. Third-party services may charge for requests.
 
-## 📖 Usage
+## Choose the context
 
-Open the chat from the ribbon icon or the **Open Ask Your Notes** command.
+| Mode | Attached to the next question |
+| --- | --- |
+| Follow the active note | The active Markdown note, including unsaved edits. Enabled by default. |
+| Selected text | In automatic mode, with **Prefer selected text** enabled, a nonempty selection replaces the full note. |
+| Explicit references | Notes chosen through `@` or the **@** button. The first reference replaces automatic following; more can be added. |
+| No attached notes | Remove all references, or disable automatic context and leave explicit references empty. |
 
-### Context modes
+Select a reference name to open its note, use its remove button to detach it, or use the reset arrow to restore automatic mode. Turning off **Use the active note as context** stops automatic attachment; explicit references still apply.
 
-- **Follow the active note** *(default)* — a chip above the input shows which note will be sent; switch notes and it follows
-- **`@`-mention notes** — type `@` in the input and pick from the vault; reference several notes for multi-note context
-- **No context** — remove the chip (`×`), or turn off *Use the active note as context* in settings; the `↺` button restores auto-follow
-- **Selection** — with *Prefer selected text* on, selected text is sent instead of the whole note
+Each request also includes previous chat messages. Switching notes or removing references does not erase those messages. Start a **New chat** when changing topics or when you need a fresh conversation.
 
-### Shortcuts
+**Max context characters** defaults to 30,000 characters **per note**. Truncation is marked in the context bar. Many references or a long conversation can still exceed a model's context window.
 
-| Action | How |
+### Controls
+
+| Action | Control |
 | --- | --- |
 | Send | `Enter` |
 | New line | `Shift+Enter` |
-| Reference a note | type `@`, pick from the list |
-| New chat | `+` button in the header |
-| Stop generation | stop button |
+| Add a note | Type `@` or select the **@** button, then choose a note |
+| Stop a reply | Select the stop button while generating |
+| Start fresh | Select **+** in the header; this clears the current conversation |
+| Reuse a reply | Select copy or insert; regenerate is available for the latest reply |
 
-### Tips
+Desktop supports streaming replies. Mobile uses non-streaming requests. Stopping a non-streaming request stops local waiting and discards the late reply; it cannot cancel the underlying request or guarantee that provider processing stops.
 
-- Select text in the editor and ask "explain this" — only the selection is sent
-- Long notes are truncated at *Max context characters* (default 30,000)
-- Replies are Markdown: hover one to **copy**, **insert** it at the cursor, or **regenerate**
+## Privacy and data
 
-## 🛠️ Development
+- **Sent to the configured endpoint:** your question, earlier chat messages, system instructions, and attached note content or selection. If supplied, the API key is sent there as an authorization header.
+- **Stored locally:** settings and the API key are saved as plain text in `<vault>/.obsidian/plugins/ask-your-notes/data.json`. With history enabled, this file also stores the last conversation, capped at 200 saved messages.
+- **History controls:** disabling persistence clears saved history while keeping the current conversation in memory. **New chat** clears the conversation; there is no conversation archive.
+- **Sync and Git:** exclude `data.json` from shared backups, sync, and version control if you do not want credentials and chat history copied. The plugin does not encrypt this file.
+- **Provider handling:** your chosen service determines how requests are processed and retained. A local Ollama endpoint can keep model requests on your machine.
+
+Answers and generated note links can be inaccurate. Check the source before relying on an answer or inserting it into your notes.
+
+## Troubleshooting
+
+| Problem | What to check |
+| --- | --- |
+| Connection test fails | Check the full endpoint, API key, model availability, and network. Re-enter the key after switching providers. |
+| Wrong note is attached | Review the references above the input. Remove them or reset automatic following. |
+| Only part of a note is used | Clear the editor selection or disable selection preference. Check the per-note character limit. |
+| Request fails or times out | Check the provider and retry. Generation times out after two minutes. Reduce references or start a new chat for context-limit errors. |
+| An old topic affects a new question | Start a new chat; earlier messages remain when you switch notes. |
+
+For [bug reports](https://github.com/Howzits/obsidian-ask-your-notes/issues), include the Obsidian and plugin versions, platform, provider/model, reproduction steps, and error message. Remove API keys and private note content.
+
+## Development
+
+Built with TypeScript and esbuild, without a UI framework. The current dependencies have been tested with **Node.js 22.23.4** and npm.
 
 ```bash
-npm install
-npm run dev         # watch mode
-npm run build       # type-check + production bundle
+git clone https://github.com/Howzits/obsidian-ask-your-notes.git
+cd obsidian-ask-your-notes
+npm ci
+npm run build
+npm test
 ```
 
-Reload Obsidian (`Cmd/Ctrl+R`) after each rebuild. The plugin is plain TypeScript bundled by esbuild — no framework.
+Copy `main.js`, `manifest.json`, and `styles.css` into a development vault's plugin folder. No separate logo files are needed at runtime. Run `npm run dev` to watch changes, then reload the plugin in Obsidian after rebuilding.
 
-## 📦 Releasing
+Run `npm run build:brand` after editing the vector logo master. See [asset documentation](assets/README.md) for exports and [CHANGELOG.md](CHANGELOG.md) for release history.
 
-Bump `version` in `manifest.json`, `package.json` and `versions.json`, then push a matching tag:
+Contributions are welcome. Keep changes focused, run `npm run build` and `npm test`, and explain the behavior changed and how it was verified in your pull request.
 
-```bash
-git tag 1.2.1 && git push origin 1.2.1
-```
+## License
 
-The GitHub Actions workflow builds and attaches `main.js`, `manifest.json` and `styles.css` to the release.
-
-## 📃 Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
-
-## 🗺️ Roadmap
-
-- [ ] Obsidian community plugin marketplace listing
-- [ ] More provider presets (Anthropic, Gemini, SiliconFlow, …)
-- [ ] More UI languages
-- [ ] Image / attachment support for providers that allow it
-- [ ] Per-conversation context pinning
-
-## 🤝 Contributing
-
-Contributions are welcome — bug reports, feature ideas and pull requests.
-
-1. Fork the repository and create a feature branch
-2. Keep changes focused; run `npm run build` before submitting
-3. Open a pull request explaining the change and why
-
-For bug reports, please include your Obsidian version, platform, provider, and what you expected vs. what happened.
-
-## 📄 License
-
-[MIT](LICENSE) © Howzits
-
----
-
-## 中文说明
-
-在 Obsidian 里与任意 OpenAI 兼容的 LLM 对话，**当前笔记即上下文**，也可以用 `@` 引用其他笔记。
-
-### 功能
-
-- 侧边栏聊天，AI 回复以 Markdown 渲染（代码块、表格、列表、公式）
-- 默认以当前激活的笔记为上下文（包含未保存的修改）；选中文字时只发送选中部分
-- 输入框输入 `@` 弹出笔记列表，可引用多篇笔记；chip 上的 `×` 移除引用，`↺` 恢复默认
-- 桌面端流式输出、可随时停止；移动端自动降级
-- 回复支持复制、插入到笔记光标处、重新生成；对话历史可持久化
-- 内置 DeepSeek / OpenAI / OpenRouter / Ollama 预设，支持任意自定义端点
-- 界面支持中文 / English，默认跟随系统
-
-### 安装
-
-- **插件市场**：正在提交，敬请期待
-- **BRAT**：*Add a beta plugin* 填入 `Howzits/obsidian-ask-your-notes`
-- **手动**：从 [Releases](https://github.com/Howzits/obsidian-ask-your-notes/releases/latest) 下载三个文件，放入 `<你的库>/.obsidian/plugins/ask-your-notes/`，重启 Obsidian 并启用
-
-### 配置与使用
-
-设置 → Ask Your Notes，选择服务商并填入 API Key，点「测试连接」确认可用。
-Enter 发送，Shift+Enter 换行；输入 `@` 引用笔记；悬停回复可复制、插入、重新生成。
-
-### 许可证
-
-[MIT](LICENSE)
+[MIT](LICENSE).

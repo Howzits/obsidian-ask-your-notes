@@ -21,6 +21,8 @@ export interface PluginSettings {
 export interface ChatMessage {
 	role: "system" | "user" | "assistant";
 	content: string;
+	/** Origin used to resolve relative links even after switching notes. */
+	sourcePath?: string;
 }
 
 export interface PluginData {

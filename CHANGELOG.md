@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-09
+
+### Added
+
+- First-run connection guidance, request status, an explicit note-reference button, and regression tests.
+- Theme-aware identity and controls, light/dark logo assets and screenshots, and a complete Chinese README.
+- Context truncation feedback, request timeouts, and persistent connection-test results.
+
+### Fixed
+
+- Duplicate sends during context reading, stale replies across sessions, and non-streaming cancellation handling.
+- Empty unsaved editors falling back to old disk content and inconsistent automatic-context references.
+- Context-read error recovery, reference changes, suggestion cursor handling, and draft preservation.
+- Streaming final-line parsing, serialized persistence, history disabling, and provider key isolation.
+- Markdown rendering, source paths, keyboard access, and narrow-sidebar layouts.
+
+### Changed
+
+- Minimum Obsidian version is 1.15.0, matching the version verified for this release.
+- Release workflow uses Node.js 22.23.4 and runs regression tests before publishing.
+
 ## [1.2.1] - 2026-11-06
 
 ### Fixed
@@ -34,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release: sidebar chat view with LLM API integration, active note as default context, streaming replies with stop support
 
-[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.1...HEAD
+[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.0...HEAD
+[1.3.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.1...1.3.0
 [1.2.1]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.0...1.2.1
 [1.2.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.0.0...1.1.0

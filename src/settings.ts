@@ -34,6 +34,7 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 				dropdown.setValue(this.plugin.settings.provider);
 				dropdown.onChange(async (value) => {
 					const id = value as ProviderId;
+					if (id !== this.plugin.settings.provider) this.plugin.settings.apiKey = "";
 					this.plugin.settings.provider = id;
 					const preset = PROVIDERS[id];
 					if (id !== "custom") {
@@ -89,18 +90,26 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 					})
 			);
 
+		const connectionResult = containerEl.createDiv({ cls: "llm-chat-connection-result", attr: { role: "status", "aria-live": "polite" } });
 		new Setting(containerEl)
 			.setName(t("testConnection"))
 			.setDesc(t("testConnectionDesc"))
 			.addButton((button) =>
 				button.setButtonText(t("test")).onClick(async () => {
-					const settings = this.plugin.settings;
+					const settings = { ...this.plugin.settings };
 					if (!settings.apiEndpoint || !settings.model) {
 						new Notice(t("testNeedConfig"));
 						return;
 					}
+					if (PROVIDERS[settings.provider].keyRequired && !settings.apiKey) {
+						connectionResult.setText(t("needApiKey"));
+						return;
+					}
 					button.setButtonText(t("testing"));
 					button.setDisabled(true);
+					connectionResult.setText(t("testing"));
+					const controller = new AbortController();
+					const timeout = window.setTimeout(() => controller.abort(), 20000);
 					try {
 						await chatCompletion({
 							endpoint: settings.apiEndpoint,
@@ -109,15 +118,19 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 							messages: [{ role: "user", content: "ping" }],
 							temperature: 0,
 							maxTokens: 16,
+							signal: controller.signal,
 						});
 						new Notice(`✅ ${t("testOk")}`);
+						connectionResult.setText(t("testOk"));
 					} catch (error) {
-						const message =
+						const message = controller.signal.aborted ? t("requestTimeout") :
 							error instanceof Error
 								? error.message
 								: String(error);
 						new Notice(`❌ ${t("testFail")}: ${message}`);
+						connectionResult.setText(`${t("testFail")}: ${message}`);
 					} finally {
+						window.clearTimeout(timeout);
 						button.setButtonText(t("test"));
 						button.setDisabled(false);
 					}
@@ -188,6 +201,7 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.includeActiveNote = value;
 						await this.plugin.saveAll();
+						this.plugin.getView()?.refreshHeader();
 					})
 			);
 
@@ -200,6 +214,7 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.preferSelection = value;
 						await this.plugin.saveAll();
+						this.plugin.getView()?.refreshHeader();
 					})
 			);
 
@@ -214,6 +229,7 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 						if (Number.isFinite(parsed) && parsed > 0) {
 							this.plugin.settings.maxContextChars = parsed;
 							await this.plugin.saveAll();
+							this.plugin.getView()?.refreshHeader();
 						}
 					})
 			);
@@ -242,6 +258,7 @@ export class LlmChatSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.persistHistory)
 					.onChange(async (value) => {
 						this.plugin.settings.persistHistory = value;
+						if (!value) this.plugin.history = [];
 						await this.plugin.saveAll();
 					})
 			);

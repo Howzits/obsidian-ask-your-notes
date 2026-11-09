@@ -1,44 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8B5CF6"/>
-      <stop offset="55%" stop-color="#7C3AED"/>
-      <stop offset="100%" stop-color="#5B21B6"/>
-    </linearGradient>
-    <linearGradient id="at" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7C3AED"/>
-      <stop offset="100%" stop-color="#4C1D95"/>
-    </linearGradient>
-    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#2E1065" flood-opacity="0.35"/>
-    </filter>
-    <filter id="softSmall" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#2E1065" flood-opacity="0.3"/>
-    </filter>
-  </defs>
-
-  <!-- App background -->
-  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <circle cx="70" cy="50" r="230" fill="#FFFFFF" opacity="0.07"/>
-  <rect x="6" y="6" width="500" height="500" rx="110" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3"/>
-
-  <!-- Sparkle accent -->
-  <path d="M402 76 C408 96 417 105 437 111 C417 117 408 126 402 146 C396 126 387 117 367 111 C387 105 396 96 402 76 Z" fill="#FFFFFF" opacity="0.85"/>
-
-  <!-- Note page -->
-  <g filter="url(#soft)">
-    <path d="M88 96 C88 80 98 68 116 68 L318 68 L364 114 L364 374 C364 392 352 406 332 406 L116 406 C98 406 88 394 88 376 Z" fill="#FFFFFF"/>
-    <path d="M318 68 L364 114 L318 114 Z" fill="#EDE9FE"/>
-    <rect x="128" y="118" width="150" height="30" rx="15" fill="#DDD6FE"/>
-    <rect x="128" y="176" width="196" height="20" rx="10" fill="#C4B5FD"/>
-    <rect x="128" y="222" width="152" height="20" rx="10" fill="#C4B5FD"/>
-    <rect x="128" y="268" width="182" height="20" rx="10" fill="#8B5CF6" opacity="0.9"/>
-    <rect x="128" y="314" width="120" height="20" rx="10" fill="#C4B5FD"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ask Your Notes">
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#6D5BD0"/>
+  <g transform="translate(99 81) scale(3.3)" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M28 12h32l20 20v36c0 8-6 14-14 14H52L32 94V82h-4c-8 0-14-6-14-14V26c0-8 6-14 14-14Z"/>
+  <path d="M60 12v14c0 4 2 6 6 6h14M30 44h30M30 58h20"/>
   </g>
-
-  <!-- Chat bubble with @ -->
-  <g filter="url(#softSmall)">
-    <path d="M248 260 C248 230 262 214 294 214 L394 214 C426 214 440 230 440 260 L440 336 C440 366 426 382 394 382 L330 382 L278 424 L300 382 L294 382 C262 382 248 366 248 336 Z" fill="#FFFFFF"/>
-  </g>
-  <text x="344" y="296" text-anchor="middle" dominant-baseline="central" font-family="Helvetica Neue, Helvetica, Arial, system-ui, sans-serif" font-size="118" font-weight="600" fill="url(#at)">@</text>
 </svg>

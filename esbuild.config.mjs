@@ -12,6 +12,7 @@ const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["main.ts"],
   bundle: true,
+  loader: { ".svg": "text" },
   external: [
     "obsidian",
     "electron",

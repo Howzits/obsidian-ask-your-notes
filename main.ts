@@ -1,4 +1,5 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
+import { BRAND_ICON, registerBrandIcon } from "./src/brand";
 import { detectLanguage, setLanguage, t } from "./src/i18n";
 import { LlmChatSettingsTab } from "./src/settings";
 import {
@@ -12,13 +13,15 @@ import { ChatView, VIEW_TYPE_CHAT } from "./src/view";
 export default class LlmChatPlugin extends Plugin {
 	settings: PluginSettings = { ...DEFAULT_SETTINGS };
 	history: ChatMessage[] = [];
+	private saveQueue: Promise<void> = Promise.resolve();
 
 	async onload(): Promise<void> {
 		await this.loadPluginData();
+		registerBrandIcon();
 
 		this.registerView(VIEW_TYPE_CHAT, (leaf) => new ChatView(leaf, this));
 
-		this.addRibbonIcon("message-square", t("openChat"), () => {
+		this.addRibbonIcon(BRAND_ICON, t("openChat"), () => {
 			void this.activateView();
 		});
 
@@ -71,9 +74,12 @@ export default class LlmChatPlugin extends Plugin {
 	async saveAll(): Promise<void> {
 		const data: PluginData = {
 			settings: this.settings,
-			history: this.history,
+			history: this.settings.persistHistory ? this.history : [],
 		};
-		await this.saveData(data);
+		// Snapshot and serialize writes so a slower old save cannot overwrite a new one.
+		const snapshot = JSON.parse(JSON.stringify(data)) as PluginData;
+		this.saveQueue = this.saveQueue.catch(() => {}).then(() => this.saveData(snapshot));
+		await this.saveQueue;
 	}
 
 	getView(): ChatView | null {

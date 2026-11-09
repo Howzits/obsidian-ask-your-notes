@@ -41,15 +41,27 @@ function parseError(status: number, text: string): string {
 	return `HTTP ${status}: ${text.slice(0, 300)}`;
 }
 
+/** requestUrl cannot cancel its transport; stop waiting and ignore late results. */
+function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (!signal) return promise;
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => reject(new DOMException("Aborted", "AbortError"));
+		if (signal.aborted) { abort(); return; }
+		signal.addEventListener("abort", abort, { once: true });
+		promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+	});
+}
+
 /** Non-streaming request via requestUrl (works on desktop and mobile). */
 export async function chatCompletion(options: ChatOptions): Promise<string> {
-	const response = await requestUrl({
+	if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+	const response = await withAbort(requestUrl({
 		url: options.endpoint,
 		method: "POST",
 		headers: buildHeaders(options.apiKey),
 		body: buildBody(options, false),
 		throw: false,
-	});
+	}), options.signal);
 
 	if (response.status < 200 || response.status >= 300) {
 		throw new Error(parseError(response.status, response.text));
@@ -84,44 +96,42 @@ export async function chatCompletionStream(
 	const decoder = new TextDecoder("utf-8");
 	let buffer = "";
 	let full = "";
+	const consume = (line: string): boolean => {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith("data:")) return false;
+		const data = trimmed.slice(5).trim();
+		if (data === "[DONE]") return true;
+		let parsed: { error?: { message?: string }; choices?: Array<{ delta?: { content?: string } }> };
+		try { parsed = JSON.parse(data); } catch { return false; }
+		if (parsed.error) throw new Error(parsed.error.message ?? "Stream error");
+		const delta = parsed.choices?.[0]?.delta?.content;
+		if (typeof delta === "string" && delta.length > 0) {
+			full += delta;
+			options.onDelta?.(delta, full);
+		}
+		return false;
+	};
 
+	try {
 	for (;;) {
 		const { done, value } = await reader.read();
-		if (done) break;
+		if (done) {
+			buffer += decoder.decode();
+			if (buffer.trim()) consume(buffer);
+			break;
+		}
 
 		buffer += decoder.decode(value, { stream: true });
 		const lines = buffer.split("\n");
 		buffer = lines.pop() ?? "";
 
 		for (const line of lines) {
-			const trimmed = line.trim();
-			if (!trimmed.startsWith("data:")) continue;
-
-			const data = trimmed.slice(5).trim();
-			if (data === "[DONE]") return full;
-
-			let json: unknown;
-			try {
-				json = JSON.parse(data);
-			} catch {
-				continue;
-			}
-
-			const parsed = json as {
-				error?: { message?: string };
-				choices?: Array<{ delta?: { content?: string } }>;
-			};
-			if (parsed.error) {
-				throw new Error(parsed.error.message ?? "Stream error");
-			}
-
-			const delta = parsed.choices?.[0]?.delta?.content;
-			if (typeof delta === "string" && delta.length > 0) {
-				full += delta;
-				options.onDelta?.(delta, full);
-			}
+			if (consume(line)) return full;
 		}
 	}
-
 	return full;
+	} finally {
+		await reader.cancel().catch(() => {});
+		reader.releaseLock();
+	}
 }
