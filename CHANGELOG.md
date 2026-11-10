@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-10
+
+### Added
+
+- Copy the entire conversation as Markdown, including the current streaming partial reply, and copy individual user messages.
+- Replace the active note with a reply through one undoable editor transaction.
+
+### Fixed
+
+- Refresh closed-note context from disk before every send/regeneration and prefer the active editor when a note is open in multiple panes.
+- Refresh context indicators on vault modifications.
+
 ## [1.3.1] - 2026-11-09
 
 ### Fixed
@@ -68,7 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release: sidebar chat view with LLM API integration, active note as default context, streaming replies with stop support
 
-[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.1...HEAD
+[Unreleased]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.1...1.4.0
 [1.3.1]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.3.0...1.3.1
 [1.3.0]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.1...1.3.0
 [1.2.1]: https://github.com/Howzits/obsidian-ask-your-notes/compare/1.2.0...1.2.1

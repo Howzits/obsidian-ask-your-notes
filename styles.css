@@ -159,6 +159,7 @@
 }
 
 .llm-chat-msg.user .llm-chat-bubble {
+	padding-bottom: 34px;
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 	border-bottom-right-radius: var(--radius-s);
@@ -592,6 +593,7 @@
 .llm-chat-chip-ref .llm-chat-chip-ref-remove { width: 24px; height: 24px; }
 .llm-chat-bubble-actions { opacity: 1; }
 .llm-chat-bubble-actions .llm-chat-icon-btn { width: 28px; height: 28px; color: var(--text-muted); }
+.llm-chat-msg.user .llm-chat-bubble-actions .llm-chat-icon-btn { color: var(--text-on-accent); }
 .llm-chat-content.markdown-rendered { padding: 0; }
 .llm-chat-content.markdown-rendered pre { margin: 12px 0; }
 @media (prefers-reduced-motion: reduce) {

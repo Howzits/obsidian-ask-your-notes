@@ -42,6 +42,7 @@ export class ChatView extends ItemView {
 	private plugin: LlmChatPlugin;
 	private messages: ChatMessage[] = [];
 	private busy = false;
+	private streamingText = "";
 	private abortController: AbortController | null = null;
 	private lastMarkdownView: MarkdownView | null = null;
 	private autoScroll = true;
@@ -118,10 +119,12 @@ export class ChatView extends ItemView {
 			refresh();
 		}));
 		this.registerEvent(this.app.vault.on("delete", refresh));
+		this.registerEvent(this.app.vault.on("modify", refresh));
 		this.registerDomEvent(this.containerEl.ownerDocument, "selectionchange", refresh);
 	}
 
 	async onClose(): Promise<void> {
+		this.streamingText = "";
 		this.sessionId++;
 		this.contextRevision++;
 		if (this.contextRefreshTimer !== null) window.clearTimeout(this.contextRefreshTimer);
@@ -166,6 +169,7 @@ export class ChatView extends ItemView {
 	}
 
 	startNewChat(): void {
+		this.streamingText = "";
 		this.sessionId++;
 		this.abortController?.abort();
 		this.abortController = null;
@@ -200,6 +204,7 @@ export class ChatView extends ItemView {
 		});
 
 		const actions = header.createDiv({ cls: "llm-chat-actions" });
+		this.iconButton(actions, "copy", t("copyConversation"), () => void this.copyConversation());
 		this.iconButton(actions, "plus", t("newChat"), () =>
 			this.startNewChat()
 		);
@@ -426,7 +431,11 @@ export class ChatView extends ItemView {
 	private renderMessage(message: ChatMessage, index: number): void {
 		if (message.role === "user") {
 			const row = this.messagesEl.createDiv({ cls: "llm-chat-msg user" });
-			row.createDiv({ cls: "llm-chat-bubble" }).setText(message.content);
+			const bubble = row.createDiv({ cls: "llm-chat-bubble" });
+			bubble.createDiv().setText(message.content);
+			this.copyText.set(bubble, message.content);
+			const actions = bubble.createDiv({ cls: "llm-chat-bubble-actions" });
+			this.iconButton(actions, "copy", t("copy"), () => void this.copyBubble(bubble));
 			return;
 		}
 		if (message.role === "assistant") {
@@ -463,10 +472,12 @@ export class ChatView extends ItemView {
 		const copy = this.iconButton(actions, "copy", t("copy"), () =>
 			void this.copyBubble(bubble)
 		);
+		copy.setAttribute("data-copy-action", "");
 		const insert = this.iconButton(actions, "arrow-down-to-line", t("insert"), () =>
 			this.insertBubble(bubble)
 		);
-		for (const button of [copy, insert]) {
+		const replace = this.iconButton(actions, "file-pen-line", t("replaceNote"), () => this.replaceNote(bubble));
+		for (const button of [copy, insert, replace]) {
 			button.setAttribute("data-answer-action", "");
 			button.addClass("is-hidden");
 		}
@@ -549,7 +560,7 @@ export class ChatView extends ItemView {
 		this.statusEl.setText(t("preparing"));
 		let context: ContextInfo[] | null;
 		try {
-			context = await this.collectContext();
+			context = await this.collectContext(true);
 		} catch {
 			if (session !== this.sessionId) return;
 			this.busy = false;
@@ -618,6 +629,9 @@ export class ChatView extends ItemView {
 					onDelta: (_delta, fullText) => {
 						if (session !== this.sessionId || controller.signal.aborted) return;
 						streamed = fullText;
+						this.streamingText = fullText;
+						this.copyText.set(bubble, fullText);
+						bubble.querySelector<HTMLElement>("[data-copy-action]")?.removeClass("is-hidden");
 						content.setText(fullText);
 						this.scrollToBottom();
 					},
@@ -684,6 +698,7 @@ export class ChatView extends ItemView {
 
 		this.scrollToBottom();
 		this.abortController = null;
+		this.streamingText = "";
 		this.busy = false;
 		this.setBusy(false);
 		if (controller.signal.aborted && !timedOut) this.statusEl.setText(t("stopped"));
@@ -723,6 +738,17 @@ export class ChatView extends ItemView {
 
 	private async copyBubble(bubble: HTMLElement): Promise<void> {
 		const text = this.copyText.get(bubble);
+		await this.copyToClipboard(text ?? "");
+	}
+
+	private async copyConversation(): Promise<void> {
+		const messages = this.messages.filter(message => message.role === "user" || message.role === "assistant");
+		const parts = messages.map(message => `## ${t(message.role === "user" ? "userRole" : "assistantRole")}\n\n${message.content}`);
+		if (this.streamingText) parts.push(`## ${t("assistantRole")}\n\n${this.streamingText}`);
+		await this.copyToClipboard(parts.join("\n\n---\n\n"));
+	}
+
+	private async copyToClipboard(text: string): Promise<void> {
 		if (!text) {
 			new Notice(t("nothingToCopy"));
 			return;
@@ -748,6 +774,19 @@ export class ChatView extends ItemView {
 		}
 		view.editor.replaceSelection(text);
 		new Notice(t("inserted"));
+	}
+
+	private replaceNote(bubble: HTMLElement): void {
+		const text = this.copyText.get(bubble);
+		if (!text) { new Notice(t("nothingToCopy")); return; }
+		const view = this.getContextView();
+		if (!view?.file) { new Notice(t("insertFailed")); return; }
+		const editor = view.editor;
+		// One editor transaction keeps the replacement in Obsidian's undo history.
+		editor.replaceRange(text, { line: 0, ch: 0 }, editor.offsetToPos(editor.getValue().length));
+		this.renderChips();
+		void this.updateContextBar();
+		new Notice(t("noteReplaced"));
 	}
 
 	// ---------- Context ----------
@@ -788,7 +827,7 @@ export class ChatView extends ItemView {
 	 * send. In auto mode the active note (or its selection) is used; in
 	 * manual mode exactly the @-referenced notes are used.
 	 */
-	private async collectContext(): Promise<ContextInfo[] | null> {
+	private async collectContext(fresh = false): Promise<ContextInfo[] | null> {
 		const settings = this.plugin.settings;
 
 		let paths: string[];
@@ -813,7 +852,9 @@ export class ChatView extends ItemView {
 
 			// Prefer the open editor buffer so unsaved edits are included.
 			let raw: string | undefined;
-			for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const active = this.getContextView();
+			if (active?.file?.path === path) raw = active.editor.getValue();
+			for (const leaf of raw === undefined ? this.app.workspace.getLeavesOfType("markdown") : []) {
 				const view = leaf.view;
 				if (view instanceof MarkdownView && view.file?.path === path) {
 					raw = view.editor.getValue();
@@ -821,7 +862,7 @@ export class ChatView extends ItemView {
 				}
 			}
 			if (raw === undefined) {
-				raw = await this.app.vault.cachedRead(file);
+				raw = fresh ? await this.app.vault.read(file) : await this.app.vault.cachedRead(file);
 			}
 
 			let isSelection = false;

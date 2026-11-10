@@ -1,6 +1,11 @@
 import type { UILanguage } from "./types";
 
 const en = {
+	copyConversation: "Copy entire conversation",
+	replaceNote: "Replace active note with this reply (undo available)",
+	noteReplaced: "Active note replaced. Use Undo to restore it.",
+	userRole: "You",
+	assistantRole: "Assistant",
 	setupTitle: "Connect a model to get started",
 	setupBody: "Choose a provider and configure your connection in Settings. Referenced note content is sent to that provider when you send a message.",
 	configure: "Configure connection",
@@ -99,6 +104,11 @@ const en = {
 type Dict = typeof en;
 
 const zh: Record<keyof Dict, string> = {
+	copyConversation: "复制全部对话",
+	replaceNote: "用此回复覆盖当前笔记（可撤销）",
+	noteReplaced: "已覆盖当前笔记，可通过撤销恢复。",
+	userRole: "我",
+	assistantRole: "助手",
 	setupTitle: "连接模型，开始和笔记对话",
 	setupBody: "先在设置中选择服务商并配置连接。发送消息时，引用的笔记内容会一并发送给该服务商。",
 	configure: "配置连接",

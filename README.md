@@ -46,7 +46,9 @@ Captured in Obsidian using a demo conversation, with no private notes or API req
 
 ## Installation
 
-Until the plugin is available in the community directory, use BRAT or install a release manually.
+In Obsidian, open **Settings → Community plugins → Browse**, search for **Ask Your Notes**, then install and enable it. Existing users can check for updates under **Community plugins**.
+
+Alternatively, use BRAT or install a release manually.
 
 ### BRAT
 
@@ -87,6 +89,8 @@ Use the full chat completions URL, not just the base URL. Switching provider pre
 
 ## Choose the context
 
+Context is refreshed before every send and regeneration: open editors supply the current unsaved content, and closed reference notes are read from disk again. File modifications also refresh the context indicator.
+
 | Mode | Attached to the next question |
 | --- | --- |
 | Follow the active note | The active Markdown note, including unsaved edits. Enabled by default. |
@@ -110,6 +114,10 @@ Each request also includes previous chat messages. Switching notes or removing r
 | Stop a reply | Select the stop button while generating |
 | Start fresh | Select **+** in the header; this clears the current conversation |
 | Reuse a reply | Select copy or insert; regenerate is available for the latest reply |
+| Replace the active note | Select the reply's replace-note button; Undo restores the previous note content |
+| Copy everything | Select **Copy entire conversation** in the header; includes questions, answers, and a currently streaming partial reply as Markdown |
+
+Each question and answer also has its own copy button. Replacing a note targets the most recently active open Markdown editor, even if the reply was based on different referenced notes; it replaces the entire note, including frontmatter.
 
 Desktop supports streaming replies. Mobile uses non-streaming requests. Stopping a non-streaming request stops local waiting and discards the late reply; it cannot cancel the underlying request or guarantee that provider processing stops.
 

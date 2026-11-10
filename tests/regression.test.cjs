@@ -221,3 +221,61 @@ test('settings expose all 15 searchable rows in four native groups', () => {
   assert.equal(new Set(rows.map(row => row.name)).size, 15);
   assert.ok(rows.every(row => typeof row.render === 'function' && row.name.length > 0));
 });
+
+test('every new request uses the latest unsaved note contents', async () => {
+  const f = fixture(), bodies = [];
+  let text = 'first version';
+  f.editor.editor.getValue = () => text;
+  f.obsidian.requestUrl = async request => {
+    bodies.push(JSON.parse(request.body));
+    return { status: 200, json: { choices: [{ message: { content: 'answer' } }] } };
+  };
+  f.view.inputEl.value = 'first question'; await f.view.send();
+  text = 'updated version';
+  f.view.inputEl.value = 'second question'; await f.view.send();
+  assert.ok(bodies[0].messages.some(message => message.content.includes('first version')));
+  assert.ok(bodies[1].messages.some(message => message.content.includes('updated version')));
+  assert.ok(!bodies[1].messages.some(message => message.content.includes('first version')));
+  f.dom.window.close();
+});
+
+test('closed reference notes are freshly read rather than using cached contents', async () => {
+  const f = fixture(); let disk = 'disk A', reads = 0;
+  f.view.manualMode = true; f.view.refs = [f.file.path];
+  f.app.workspace.getActiveViewOfType = () => null;
+  f.app.workspace.getLeavesOfType = () => [];
+  f.app.vault.read = async () => { reads++; return disk; };
+  assert.equal((await f.view.collectContext(true))[0].content, 'disk A');
+  disk = 'disk B';
+  assert.equal((await f.view.collectContext(true))[0].content, 'disk B');
+  assert.equal(reads, 2); f.dom.window.close();
+});
+
+test('replace uses one whole-document editor transaction on the current note', () => {
+  const f = fixture(), calls = [];
+  f.editor.editor.offsetToPos = length => ({ line: 1, ch: length - 4 });
+  f.editor.editor.replaceRange = (...args) => calls.push(args);
+  const { bubble } = f.view.createAssistantBubble(); f.view.setBubbleText(bubble, '# New note');
+  f.view.replaceNote(bubble);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], '# New note');
+  assert.equal(calls[0][1].line, 0); assert.equal(calls[0][1].ch, 0);
+  assert.equal(calls[0][2].line, 1); assert.equal(calls[0][2].ch, 8);
+  f.dom.window.close();
+});
+
+test('copy entire chat preserves Markdown, both roles and the current partial reply', async () => {
+  const f = fixture(); let copied;
+  f.dom.window.navigator.clipboard = { writeText: async text => { copied = text; } };
+  f.view.messages = [{role:'system',content:'hidden instructions'}, {role:'user',content:'my question'},
+    {role:'assistant',content:'**answer**\n\n```js\n1\n```'}, {role:'user',content:'follow-up'}];
+  f.view.streamingText = 'partial reply';
+  await f.view.copyConversation();
+  assert.match(copied, /my question/); assert.match(copied, /\*\*answer\*\*/);
+  assert.match(copied, /follow-up/); assert.match(copied, /partial reply/);
+  assert.ok(!copied.includes('hidden instructions'));
+  f.view.renderConversation();
+  const user = f.view.messagesEl.querySelector('.user .llm-chat-bubble');
+  await f.view.copyBubble(user); assert.equal(copied, 'my question');
+  f.dom.window.close();
+});

@@ -42,6 +42,11 @@ function registerBrandIcon() {
 
 // src/i18n.ts
 var en = {
+  copyConversation: "Copy entire conversation",
+  replaceNote: "Replace active note with this reply (undo available)",
+  noteReplaced: "Active note replaced. Use Undo to restore it.",
+  userRole: "You",
+  assistantRole: "Assistant",
   setupTitle: "Connect a model to get started",
   setupBody: "Choose a provider and configure your connection in Settings. Referenced note content is sent to that provider when you send a message.",
   configure: "Configure connection",
@@ -134,6 +139,11 @@ var en = {
   resetDone: "Settings restored to defaults"
 };
 var zh = {
+  copyConversation: "\u590D\u5236\u5168\u90E8\u5BF9\u8BDD",
+  replaceNote: "\u7528\u6B64\u56DE\u590D\u8986\u76D6\u5F53\u524D\u7B14\u8BB0\uFF08\u53EF\u64A4\u9500\uFF09",
+  noteReplaced: "\u5DF2\u8986\u76D6\u5F53\u524D\u7B14\u8BB0\uFF0C\u53EF\u901A\u8FC7\u64A4\u9500\u6062\u590D\u3002",
+  userRole: "\u6211",
+  assistantRole: "\u52A9\u624B",
   setupTitle: "\u8FDE\u63A5\u6A21\u578B\uFF0C\u5F00\u59CB\u548C\u7B14\u8BB0\u5BF9\u8BDD",
   setupBody: "\u5148\u5728\u8BBE\u7F6E\u4E2D\u9009\u62E9\u670D\u52A1\u5546\u5E76\u914D\u7F6E\u8FDE\u63A5\u3002\u53D1\u9001\u6D88\u606F\u65F6\uFF0C\u5F15\u7528\u7684\u7B14\u8BB0\u5185\u5BB9\u4F1A\u4E00\u5E76\u53D1\u9001\u7ED9\u8BE5\u670D\u52A1\u5546\u3002",
   configure: "\u914D\u7F6E\u8FDE\u63A5",
@@ -805,6 +815,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     super(leaf);
     this.messages = [];
     this.busy = false;
+    this.streamingText = "";
     this.abortController = null;
     this.lastMarkdownView = null;
     this.autoScroll = true;
@@ -861,10 +872,12 @@ var ChatView = class extends import_obsidian5.ItemView {
       refresh();
     }));
     this.registerEvent(this.app.vault.on("delete", refresh));
+    this.registerEvent(this.app.vault.on("modify", refresh));
     this.registerDomEvent(this.containerEl.ownerDocument, "selectionchange", refresh);
   }
   async onClose() {
     var _a, _b;
+    this.streamingText = "";
     this.sessionId++;
     this.contextRevision++;
     if (this.contextRefreshTimer !== null) window.clearTimeout(this.contextRefreshTimer);
@@ -906,6 +919,7 @@ var ChatView = class extends import_obsidian5.ItemView {
   }
   startNewChat() {
     var _a, _b;
+    this.streamingText = "";
     this.sessionId++;
     (_a = this.abortController) == null ? void 0 : _a.abort();
     this.abortController = null;
@@ -936,6 +950,7 @@ var ChatView = class extends import_obsidian5.ItemView {
       text: this.plugin.settings.model || t("modelUnset")
     });
     const actions = header.createDiv({ cls: "llm-chat-actions" });
+    this.iconButton(actions, "copy", t("copyConversation"), () => void this.copyConversation());
     this.iconButton(
       actions,
       "plus",
@@ -1143,7 +1158,11 @@ var ChatView = class extends import_obsidian5.ItemView {
   renderMessage(message, index) {
     if (message.role === "user") {
       const row = this.messagesEl.createDiv({ cls: "llm-chat-msg user" });
-      row.createDiv({ cls: "llm-chat-bubble" }).setText(message.content);
+      const bubble = row.createDiv({ cls: "llm-chat-bubble" });
+      bubble.createDiv().setText(message.content);
+      this.copyText.set(bubble, message.content);
+      const actions = bubble.createDiv({ cls: "llm-chat-bubble-actions" });
+      this.iconButton(actions, "copy", t("copy"), () => void this.copyBubble(bubble));
       return;
     }
     if (message.role === "assistant") {
@@ -1174,13 +1193,15 @@ var ChatView = class extends import_obsidian5.ItemView {
       t("copy"),
       () => void this.copyBubble(bubble)
     );
+    copy.setAttribute("data-copy-action", "");
     const insert = this.iconButton(
       actions,
       "arrow-down-to-line",
       t("insert"),
       () => this.insertBubble(bubble)
     );
-    for (const button of [copy, insert]) {
+    const replace = this.iconButton(actions, "file-pen-line", t("replaceNote"), () => this.replaceNote(bubble));
+    for (const button of [copy, insert, replace]) {
       button.setAttribute("data-answer-action", "");
       button.addClass("is-hidden");
     }
@@ -1250,7 +1271,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     this.statusEl.setText(t("preparing"));
     let context;
     try {
-      context = await this.collectContext();
+      context = await this.collectContext(true);
     } catch (e) {
       if (session !== this.sessionId) return;
       this.busy = false;
@@ -1314,8 +1335,12 @@ var ChatView = class extends import_obsidian5.ItemView {
           maxTokens: settings.maxTokens,
           signal: controller.signal,
           onDelta: (_delta, fullText) => {
+            var _a2;
             if (session !== this.sessionId || controller.signal.aborted) return;
             streamed = fullText;
+            this.streamingText = fullText;
+            this.copyText.set(bubble, fullText);
+            (_a2 = bubble.querySelector("[data-copy-action]")) == null ? void 0 : _a2.removeClass("is-hidden");
             content.setText(fullText);
             this.scrollToBottom();
           }
@@ -1377,6 +1402,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     }
     this.scrollToBottom();
     this.abortController = null;
+    this.streamingText = "";
     this.busy = false;
     this.setBusy(false);
     if (controller.signal.aborted && !timedOut) this.statusEl.setText(t("stopped"));
@@ -1411,6 +1437,19 @@ var ChatView = class extends import_obsidian5.ItemView {
   // ---------- Bubble actions ----------
   async copyBubble(bubble) {
     const text = this.copyText.get(bubble);
+    await this.copyToClipboard(text != null ? text : "");
+  }
+  async copyConversation() {
+    const messages = this.messages.filter((message) => message.role === "user" || message.role === "assistant");
+    const parts = messages.map((message) => `## ${t(message.role === "user" ? "userRole" : "assistantRole")}
+
+${message.content}`);
+    if (this.streamingText) parts.push(`## ${t("assistantRole")}
+
+${this.streamingText}`);
+    await this.copyToClipboard(parts.join("\n\n---\n\n"));
+  }
+  async copyToClipboard(text) {
     if (!text) {
       new import_obsidian5.Notice(t("nothingToCopy"));
       return;
@@ -1435,6 +1474,23 @@ var ChatView = class extends import_obsidian5.ItemView {
     }
     view.editor.replaceSelection(text);
     new import_obsidian5.Notice(t("inserted"));
+  }
+  replaceNote(bubble) {
+    const text = this.copyText.get(bubble);
+    if (!text) {
+      new import_obsidian5.Notice(t("nothingToCopy"));
+      return;
+    }
+    const view = this.getContextView();
+    if (!(view == null ? void 0 : view.file)) {
+      new import_obsidian5.Notice(t("insertFailed"));
+      return;
+    }
+    const editor = view.editor;
+    editor.replaceRange(text, { line: 0, ch: 0 }, editor.offsetToPos(editor.getValue().length));
+    this.renderChips();
+    void this.updateContextBar();
+    new import_obsidian5.Notice(t("noteReplaced"));
   }
   // ---------- Context ----------
   initContextView() {
@@ -1467,8 +1523,8 @@ var ChatView = class extends import_obsidian5.ItemView {
    * send. In auto mode the active note (or its selection) is used; in
    * manual mode exactly the @-referenced notes are used.
    */
-  async collectContext() {
-    var _a, _b, _c;
+  async collectContext(fresh = false) {
+    var _a, _b, _c, _d;
     const settings = this.plugin.settings;
     let paths;
     let autoSingle = false;
@@ -1488,15 +1544,17 @@ var ChatView = class extends import_obsidian5.ItemView {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (!(file instanceof import_obsidian5.TFile)) throw new Error(`Missing note: ${path}`);
       let raw;
-      for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const active = this.getContextView();
+      if (((_c = active == null ? void 0 : active.file) == null ? void 0 : _c.path) === path) raw = active.editor.getValue();
+      for (const leaf of raw === void 0 ? this.app.workspace.getLeavesOfType("markdown") : []) {
         const view = leaf.view;
-        if (view instanceof import_obsidian5.MarkdownView && ((_c = view.file) == null ? void 0 : _c.path) === path) {
+        if (view instanceof import_obsidian5.MarkdownView && ((_d = view.file) == null ? void 0 : _d.path) === path) {
           raw = view.editor.getValue();
           break;
         }
       }
       if (raw === void 0) {
-        raw = await this.app.vault.cachedRead(file);
+        raw = fresh ? await this.app.vault.read(file) : await this.app.vault.cachedRead(file);
       }
       let isSelection = false;
       if (autoSingle && settings.preferSelection) {
